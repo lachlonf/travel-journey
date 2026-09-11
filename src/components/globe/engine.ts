@@ -22,7 +22,8 @@ export interface GlobeEngine {
   flyTo(target: CameraTarget): void;
   setUnlocked(countries: readonly UnlockableCountry[]): void;
   setPins(pins: readonly Pin[], elements: ReadonlyMap<string, HTMLElement>): void;
-  setPanelOpen(open: boolean): void;
+  /** `sheetReserveRem`: extra space above the bottom sheet to keep clear, e.g. story mode's controls. */
+  setPanelOpen(open: boolean, sheetReserveRem?: number): void;
   dispose(): void;
 }
 
@@ -134,7 +135,13 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
   function flyTo(target: CameraTarget) {
     const here = vector3ToLatLng(camera.position.toArray());
     const from = { ...here, altitude: camera.position.length() - 1 };
-    const to = { lat: target.lat ?? here.lat, lng: target.lng ?? here.lng, altitude: target.altitude };
+    // Places are framed for the whole screen; on phones the sheet hides part of it, so pull back to fit above.
+    const visible = 1 - sheetCover(container.clientWidth, container.clientHeight);
+    const to = {
+      lat: target.lat ?? here.lat,
+      lng: target.lng ?? here.lng,
+      altitude: target.lat === null ? target.altitude : target.altitude / visible,
+    };
     const hop = distanceKm(from, to) / EARTH_RADIUS_KM;
     const still = hop < 1e-5 && Math.abs(to.altitude - from.altitude) < 1e-3;
     const effort = Math.min(1, hop / 1.5 + Math.abs(Math.log(to.altitude / from.altitude)) / 5);
@@ -276,6 +283,11 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
     (built) => {
       if (disposed) return built.texture.dispose();
       mask = built;
+      // Green and blue carry each country's horizontal extent, so the reveal can sweep across it.
+      built.extents.forEach(({ start, span }, index) => {
+        unlockData[index * 4 + 1] = Math.round(start * 255);
+        unlockData[index * 4 + 2] = Math.max(1, Math.round(span * 255));
+      });
       globeMaterial.uniforms.countryMask.value = built.texture;
       applyUnlocked();
     },
@@ -284,8 +296,15 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
 
   // Frame loop.
   let panelOpen = false;
+  let sheetReserve = 0;
   const inset = new THREE.Vector2();
   const insetGoal = new THREE.Vector2();
+
+  /** Fraction of the screen's height hidden by the bottom sheet and anything reserved above it. */
+  function sheetCover(width: number, height: number): number {
+    if (!panelOpen || width > SHEET_BREAKPOINT_PX || !height) return 0;
+    return Math.min(0.8, SHEET_HEIGHT + (sheetReserve * remPx) / height);
+  }
   let frameId = requestAnimationFrame(frame);
 
   function frame(now: number) {
@@ -308,11 +327,8 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
     }
 
     // Centre the view in whatever part of the screen the story panel leaves uncovered.
-    const sheet = width <= SHEET_BREAKPOINT_PX;
-    insetGoal.set(
-      panelOpen && !sheet ? Math.min(PANEL_WIDTH_REM * remPx, width) : 0,
-      panelOpen && sheet ? height * SHEET_HEIGHT : 0,
-    );
+    const sideways = panelOpen && width > SHEET_BREAKPOINT_PX;
+    insetGoal.set(sideways ? Math.min(PANEL_WIDTH_REM * remPx, width) : 0, height * sheetCover(width, height));
     inset.lerp(insetGoal, reducedMotion ? 1 : 0.08);
     camera.setViewOffset(width, height, inset.x / 2, inset.y / 2, width, height);
 
@@ -338,8 +354,9 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
         return element ? [{ element, position: new THREE.Vector3(...latLngToVector3(pin.lat, pin.lng)) }] : [];
       });
     },
-    setPanelOpen(open) {
+    setPanelOpen(open, sheetReserveRem = 0) {
       panelOpen = open;
+      sheetReserve = sheetReserveRem;
     },
     dispose() {
       disposed = true;

@@ -1,7 +1,7 @@
 import { isAdmin } from "@/lib/auth";
 import { searchCities, type City } from "@/lib/cities";
 import { loadCities } from "@/lib/cities-data";
-import { nearestCity } from "@/lib/geo";
+import { isValidLatLng, nearestCity } from "@/lib/geo";
 import { countryName } from "@/lib/journey";
 
 export interface CityResult extends City {
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const lat = Number(params.get("lat"));
   const lng = Number(params.get("lng"));
 
-  if (params.get("lat") && params.get("lng") && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+  if (params.get("lat") && params.get("lng") && isValidLatLng(lat, lng)) {
     const nearest = nearestCity({ lat, lng }, cities);
     return Response.json({ nearest: nearest && withCountry(nearest) });
   }

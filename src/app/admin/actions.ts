@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireAdmin, sessionSecret } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
+import { isValidLatLng } from "@/lib/geo";
 import { findCityPlace } from "@/lib/journey";
 import { getRepository } from "@/lib/repository";
 import { isAllowedImageType } from "@/lib/repository/types";
-import { createSessionToken, passwordMatches, SESSION_COOKIE, SESSION_TTL_MS } from "@/lib/session";
+import { createSessionToken, passwordMatches, SESSION_COOKIE, SESSION_TTL_MS, sessionSecret } from "@/lib/session";
 import type { PlaceKind } from "@/lib/types";
 
 export interface FormState {
@@ -30,8 +31,6 @@ export interface PlaceInput {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const field = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
-const isLatLng = (lat: unknown, lng: unknown) =>
-  typeof lat === "number" && typeof lng === "number" && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 
 const revalidateSite = () => revalidatePath("/", "layout");
 
@@ -90,7 +89,7 @@ export async function createPlace(input: PlaceInput): Promise<{ error: string } 
 
   if (input.kind !== "city" && input.kind !== "poi") return { error: "Choose city or specific spot." };
   if (!name) return { error: "The place needs a name." };
-  if (!isLatLng(input.lat, input.lng)) return { error: "Those coordinates aren't on Earth." };
+  if (!isValidLatLng(input.lat, input.lng)) return { error: "Those coordinates aren't on Earth." };
   if (!/^[A-Z]{2}$/.test(countryCode)) return { error: "Country must be a two-letter code, like PE." };
   if (input.visitedOn && !ISO_DATE.test(input.visitedOn)) return { error: "Visit date must be YYYY-MM-DD." };
   if (tripId && !data.trips.some((t) => t.id === tripId)) return { error: "That trip doesn't exist." };
@@ -101,7 +100,7 @@ export async function createPlace(input: PlaceInput): Promise<{ error: string } 
   let parentId: string | null = null;
   if (input.kind === "poi") {
     const parentName = String(input.parent?.name ?? "").trim();
-    if (!input.parent || !parentName || !isLatLng(input.parent.lat, input.parent.lng)) {
+    if (!input.parent || !parentName || !isValidLatLng(input.parent.lat, input.parent.lng)) {
       return { error: "A specific spot needs a city to fold into." };
     }
     const existing = findCityPlace(data.places, parentName, countryCode);
@@ -115,8 +114,9 @@ export async function createPlace(input: PlaceInput): Promise<{ error: string } 
           lng: input.parent.lng,
           countryCode,
           parentId: null,
-          tripId,
-          visitedOn,
+          // Just the grouping the spot folds into, not a stop you chose: no trip, no visit.
+          tripId: null,
+          visitedOn: [],
           story: "",
         })
       ).id;
@@ -157,7 +157,7 @@ export async function addPhoto(formData: FormData): Promise<{ error: string } | 
       placeId,
       caption: field(formData, "caption"),
       takenAt,
-      ...(isLatLng(lat, lng) ? { lat, lng } : { lat: null, lng: null }),
+      ...(isValidLatLng(lat, lng) ? { lat, lng } : { lat: null, lng: null }),
       sortOrder: data.photos.filter((p) => p.placeId === placeId).length,
     },
     { bytes: new Uint8Array(await file.arrayBuffer()), contentType: file.type },

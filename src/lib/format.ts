@@ -8,4 +8,11 @@ export function formatRange(from: string | null, to: string | null): string | nu
   return only ? formatDate(only) : null;
 }
 
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** Story text as paragraphs: a blank line starts a new one. */
+export const paragraphs = (text: string) =>
+  text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+export const plural =(n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;

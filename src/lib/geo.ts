@@ -10,7 +10,7 @@ export interface CameraStop extends LatLng {
 export const EARTH_RADIUS_KM = 6371;
 const RAD = Math.PI / 180;
 
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+export const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const scale = (v: Vec3, s: number): Vec3 => [v[0] * s, v[1] * s, v[2] * s];
@@ -33,6 +33,10 @@ export function vector3ToLatLng([x, y, z]: readonly [number, number, number]): L
   let lng = Math.atan2(z, -x) / RAD - 180;
   if (lng < -180) lng += 360;
   return { lat, lng };
+}
+
+export function isValidLatLng(lat: unknown, lng: unknown): boolean {
+  return typeof lat === "number" && typeof lng === "number" && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 }
 
 export function distanceKm(a: LatLng, b: LatLng): number {

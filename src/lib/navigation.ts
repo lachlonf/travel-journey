@@ -1,4 +1,4 @@
-import { centroid, spreadKm } from "./geo";
+import { centroid, clamp, spreadKm } from "./geo";
 import type { CityNode, Journey } from "./journey";
 import type { Place } from "./types";
 
@@ -41,7 +41,6 @@ export const WORLD_ALTITUDE = 2.2;
 /** Km of spread that fills the view at altitude 1, for a 45° field of view with some margin. */
 const KM_PER_ALTITUDE = 1650;
 
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const cityNav = (node: CityNode): Nav => ({ level: "city", country: node.place.countryCode, cityId: node.place.id });
 
 export function navigate(journey: Journey, view: View, action: NavAction): View {

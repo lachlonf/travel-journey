@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatRange, plural } from "@/lib/format";
+import { formatRange, paragraphs, plural } from "@/lib/format";
 import { buildJourney, tripCountries, tripStops } from "@/lib/journey";
 import { initialView, navigate, type NavAction } from "@/lib/navigation";
 import type { JourneyData, Place } from "@/lib/types";
@@ -50,14 +50,12 @@ export function StoryApp({ data, tripId, startPlaceId }: { data: JourneyData; tr
 
   const countries = tripCountries(journey, tripId).map((c) => c.name);
   const dates = formatRange(trip.startDate, trip.endDate);
-  const paragraphs = trip.story
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const intro = paragraphs(trip.story);
 
   return (
     <main className="stage">
-      <LazyGlobe journey={journey} nav={nav} panelOpen={Boolean(stop)} onNavigate={onNavigate} />
+      {/* The story bar sits above the sheet on phones (see .story-bar in globals.css). */}
+      <LazyGlobe journey={journey} nav={nav} panelOpen={Boolean(stop)} sheetReserveRem={5.5} onNavigate={onNavigate} />
 
       <header className="hud">
         <Link href="/" className="hud-home">
@@ -73,9 +71,9 @@ export function StoryApp({ data, tripId, startPlaceId }: { data: JourneyData; tr
           <p className="kicker">{countries.length ? `A trip through ${countries.join(", ")}` : "A trip"}</p>
           <h1 id="trip-title">{trip.name}</h1>
           {dates && <p className="muted">{dates}</p>}
-          {paragraphs.length > 0 && (
+          {intro.length > 0 && (
             <div className="story-body">
-              {paragraphs.map((paragraph, i) => (
+              {intro.map((paragraph, i) => (
                 <p key={i}>{paragraph}</p>
               ))}
             </div>

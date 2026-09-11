@@ -13,6 +13,7 @@ export function detectQuality(): Quality {
   const pixelRatio = Math.min(window.devicePixelRatio || 1, light ? 1.5 : 2);
 
   return light
-    ? { pixelRatio, cellSize: 9 * pixelRatio, segments: 64, maskWidth: 2048, atlas: "110m" }
+    ? // Same atlas as desktop, so a phone never shows fewer unlocked countries.
+      { pixelRatio, cellSize: 9 * pixelRatio, segments: 64, maskWidth: 2048, atlas: "50m" }
     : { pixelRatio, cellSize: 8 * pixelRatio, segments: 128, maskWidth: 4096, atlas: "50m" };
 }

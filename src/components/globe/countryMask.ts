@@ -15,9 +15,16 @@ export interface CountryMask {
   height: number;
   indexByNumericId: Map<string, number>;
   numericIdByIndex: (string | undefined)[];
+  /** Per index: where the country starts and how wide it is, as fractions of the texture. Drives the unlock sweep. */
+  extents: { start: number; span: number }[];
 }
 
 type Countries = Topology<{ countries: GeometryCollection }>;
+
+// Equirectangular: longitude and latitude map linearly onto the texture.
+const toX = (lng: number, width: number) => ((lng + 180) / 360) * width;
+const toY = (lat: number, height: number) => ((90 - lat) / 180) * height;
+const toPixel = (value: number, size: number) => Math.min(size - 1, Math.max(0, Math.floor(value)));
 
 export async function buildCountryMask(detail: "110m" | "50m", width: number): Promise<CountryMask> {
   const response = await fetch(`/geo/countries-${detail}.json`);
@@ -46,10 +53,8 @@ export async function buildCountryMask(detail: "110m" | "50m", width: number): P
     for (const rings of polygons) {
       for (const ring of rings) {
         ring.forEach(([lng, lat], j) => {
-          const x = ((lng + 180) / 360) * width;
-          const y = ((90 - lat) / 180) * height;
-          if (j === 0) context.moveTo(x, y);
-          else context.lineTo(x, y);
+          if (j === 0) context.moveTo(toX(lng, width), toY(lat, height));
+          else context.lineTo(toX(lng, width), toY(lat, height));
         });
       }
     }
@@ -59,13 +64,26 @@ export async function buildCountryMask(detail: "110m" | "50m", width: number): P
 
   // Canvas anti-aliases edges into partial alpha, whose colours aren't real indices.
   // Clear those. (Pixels blended along shared borders stay opaque and can be off by
-  // a neighbour; at this resolution that's a sub-pixel speck.)
+  // a neighbour; at this resolution that's a sub-pixel speck.) Measure extents on the way.
   const image = context.getImageData(0, 0, width, height);
   const { data } = image;
+  const minX = new Uint16Array(256).fill(width);
+  const maxX = new Uint16Array(256);
   for (let p = 0; p < data.length; p += 4) {
-    if (data[p + 3] !== 255) data.fill(0, p, p + 4);
+    if (data[p + 3] !== 255) {
+      data.fill(0, p, p + 4);
+      continue;
+    }
+    const index = data[p];
+    const x = (p >> 2) % width;
+    if (x < minX[index]) minX[index] = x;
+    if (x > maxX[index]) maxX[index] = x;
   }
   context.putImageData(image, 0, 0);
+
+  const extents = Array.from({ length: 256 }, (_, i) =>
+    maxX[i] >= minX[i] ? { start: minX[i] / width, span: (maxX[i] - minX[i] + 1) / width } : { start: 0, span: 1 },
+  );
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.NoColorSpace;
@@ -73,11 +91,11 @@ export async function buildCountryMask(detail: "110m" | "50m", width: number): P
   texture.minFilter = THREE.NearestFilter;
   texture.generateMipmaps = false;
 
-  return { texture, pixels: data, width, height, indexByNumericId, numericIdByIndex };
+  return { texture, pixels: data, width, height, indexByNumericId, numericIdByIndex, extents };
 }
 
 export function countryIndexAt(mask: CountryMask, lat: number, lng: number): number {
-  const x = Math.min(mask.width - 1, Math.max(0, Math.floor(((lng + 180) / 360) * mask.width)));
-  const y = Math.min(mask.height - 1, Math.max(0, Math.floor(((90 - lat) / 180) * mask.height)));
+  const x = toPixel(toX(lng, mask.width), mask.width);
+  const y = toPixel(toY(lat, mask.height), mask.height);
   return mask.pixels[(y * mask.width + x) * 4];
 }

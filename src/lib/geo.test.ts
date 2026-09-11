@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { centroid, distanceKm, flightPosition, latLngToVector3, nearestCity, vector3ToLatLng } from "./geo";
+import { centroid, distanceKm, flightPosition, isValidLatLng, latLngToVector3, nearestCity, vector3ToLatLng } from "./geo";
 
 type Vec = readonly [number, number, number];
 
@@ -27,6 +27,17 @@ describe("latLngToVector3", () => {
     const { lat, lng } = vector3ToLatLng(latLngToVector3(-13.53, -71.97, 3));
     expect(lat).toBeCloseTo(-13.53, 6);
     expect(lng).toBeCloseTo(-71.97, 6);
+  });
+});
+
+describe("isValidLatLng", () => {
+  it("accepts coordinates on Earth and rejects everything else", () => {
+    expect(isValidLatLng(-9.2112, -77.5466)).toBe(true);
+    expect(isValidLatLng(90, -180)).toBe(true);
+    expect(isValidLatLng(90.1, 0)).toBe(false);
+    expect(isValidLatLng(0, 180.1)).toBe(false);
+    expect(isValidLatLng(Number.NaN, 0)).toBe(false);
+    expect(isValidLatLng("9", 0)).toBe(false);
   });
 });
 

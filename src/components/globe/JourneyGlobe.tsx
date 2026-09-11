@@ -10,6 +10,8 @@ export interface JourneyGlobeProps {
   nav: Nav;
   /** Shifts the globe out from under the story panel. */
   panelOpen: boolean;
+  /** On phones, extra height above the bottom sheet that's covered by other controls. */
+  sheetReserveRem?: number;
   onNavigate: (action: NavAction) => void;
 }
 
@@ -19,7 +21,7 @@ function actionFor(pin: Pin, nav: Nav): NavAction {
   return { type: "openPlace", placeId: pin.id };
 }
 
-export default function JourneyGlobe({ journey, nav, panelOpen, onNavigate }: JourneyGlobeProps) {
+export default function JourneyGlobe({ journey, nav, panelOpen, sheetReserveRem = 0, onNavigate }: JourneyGlobeProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GlobeEngine | null>(null);
   const pinElements = useRef(new Map<string, HTMLElement>());
@@ -47,6 +49,11 @@ export default function JourneyGlobe({ journey, nav, panelOpen, onNavigate }: Jo
     engineRef.current?.setUnlocked(journey.countries);
   }, [journey]);
 
+  // Before the flight effect: the flight frames places around whatever the panel covers.
+  useEffect(() => {
+    engineRef.current?.setPanelOpen(panelOpen, sheetReserveRem);
+  }, [panelOpen, sheetReserveRem]);
+
   // Only a change of place flies the camera, not fresh data for the same place.
   useEffect(() => {
     engineRef.current?.flyTo(cameraTarget(latest.current.journey, nav));
@@ -55,10 +62,6 @@ export default function JourneyGlobe({ journey, nav, panelOpen, onNavigate }: Jo
   useEffect(() => {
     engineRef.current?.setPins(pins, pinElements.current);
   }, [pins]);
-
-  useEffect(() => {
-    engineRef.current?.setPanelOpen(panelOpen);
-  }, [panelOpen]);
 
   if (!webgl) {
     return (

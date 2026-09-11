@@ -32,7 +32,7 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
   async function update<T>(change: (data: JourneyData) => T): Promise<T> {
     const data = await load();
     const result = change(data);
-    await mkdir(/* turbopackIgnore: true */ dirname(options.dataFile), { recursive: true });
+    await mkdir(dirname(/* turbopackIgnore: true */ options.dataFile), { recursive: true });
     await writeFile(/* turbopackIgnore: true */ options.dataFile, JSON.stringify(data, null, 2));
     return result;
   }
@@ -56,7 +56,7 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
       const id = randomUUID();
       const fileName = `${id}.${extensionFor(file.contentType)}`;
       await mkdir(/* turbopackIgnore: true */ options.uploadsDir, { recursive: true });
-      await writeFile(/* turbopackIgnore: true */ join(options.uploadsDir, fileName), file.bytes);
+      await writeFile(join(/* turbopackIgnore: true */ options.uploadsDir, fileName), file.bytes);
       return update((data) => {
         const photo = { ...input, id, url: `${options.publicUrlPrefix}/${fileName}` };
         data.photos.push(photo);

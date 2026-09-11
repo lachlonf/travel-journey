@@ -26,5 +26,6 @@ const EXTENSIONS: Record<string, string> = {
   "image/heic": "heic",
 };
 
+export const IMAGE_TYPES = Object.keys(EXTENSIONS);
 export const isAllowedImageType = (contentType: string) => contentType in EXTENSIONS;
 export const extensionFor = (contentType: string) => EXTENSIONS[contentType] ?? "img";

@@ -2,6 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { readPhotoMetadata, type PhotoMetadata } from "@/lib/exif";
+import { IMAGE_TYPES } from "@/lib/repository/types";
 import { addPhoto } from "./actions";
 
 export interface PendingPhoto {
@@ -14,7 +15,7 @@ export interface PendingPhoto {
 }
 
 const MAX_EDGE_PX = 2400;
-const ACCEPT = "image/jpeg,image/png,image/webp,image/avif,image/heic";
+const ACCEPT = IMAGE_TYPES.join(",");
 
 /** Resize in the browser so uploads stay small (and under the host's request limit). */
 async function shrink(file: File): Promise<Blob> {

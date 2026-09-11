@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import type { CityResult } from "@/app/api/cities/route";
+import { isValidLatLng } from "@/lib/geo";
 import type { Trip } from "@/lib/types";
 import { createPlace, type PlaceInput } from "./actions";
 import { CitySearch } from "./CitySearch";
@@ -40,11 +41,11 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
   /** Look up the nearest city. It only fills blanks, so nothing you've typed is overwritten. */
   function suggestNearest(latText: string, lngText: string) {
     clearTimeout(lookup.current);
-    const [la, ln] = [Number(latText), Number(lngText)];
-    if (!latText.trim() || !lngText.trim() || !(Math.abs(la) <= 90 && Math.abs(ln) <= 180)) return;
+    const [latitude, longitude] = [Number(latText), Number(lngText)];
+    if (!latText.trim() || !lngText.trim() || !isValidLatLng(latitude, longitude)) return;
 
     lookup.current = setTimeout(async () => {
-      const response = await fetch(`/api/cities?lat=${la}&lng=${ln}`);
+      const response = await fetch(`/api/cities?lat=${latitude}&lng=${longitude}`);
       if (!response.ok) return;
       const { nearest: city } = (await response.json()) as { nearest: CityResult | null };
       if (!city) return;

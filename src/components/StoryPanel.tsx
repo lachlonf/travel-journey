@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatDate, plural } from "@/lib/format";
+import { formatDate, paragraphs, plural } from "@/lib/format";
 import type { Journey } from "@/lib/journey";
 
 interface StoryPanelProps {
@@ -20,10 +20,7 @@ export function StoryPanel({ journey, placeId, showTripLink = false, onClose, on
   const country = journey.countryByCode.get(city.place.countryCode);
   const trip = place.tripId ? journey.tripById.get(place.tripId) : undefined;
   const photos = journey.photosByPlace.get(place.id) ?? [];
-  const paragraphs = place.story
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const body = paragraphs(place.story);
   const nearby = place.kind === "city" ? city.pois : [city.place, ...city.pois.filter((p) => p.id !== place.id)];
   const where = [place.kind === "poi" ? city.place.name : null, country?.name].filter(Boolean).join(", ");
 
@@ -49,9 +46,9 @@ export function StoryPanel({ journey, placeId, showTripLink = false, onClose, on
           </Link>
         )}
 
-        {paragraphs.length > 0 && (
+        {body.length > 0 && (
           <div className="story-body">
-            {paragraphs.map((paragraph, i) => (
+            {body.map((paragraph, i) => (
               <p key={i}>{paragraph}</p>
             ))}
           </div>
@@ -68,7 +65,7 @@ export function StoryPanel({ journey, placeId, showTripLink = false, onClose, on
           </figure>
         ))}
 
-        {paragraphs.length === 0 && photos.length === 0 && <p className="story-empty">Nothing written here yet.</p>}
+        {body.length === 0 && photos.length === 0 && <p className="story-empty">Nothing written here yet.</p>}
 
         {onOpenPlace && nearby.length > 0 && (
           <nav className="story-related" aria-label="Nearby">

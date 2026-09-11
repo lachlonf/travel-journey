@@ -46,7 +46,7 @@ Import the repo into Vercel and set `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABAS
   - `navigation.ts` handles the three drill-in levels, which pins show at each, and where the camera goes.
   - `geo.ts` has the sphere maths and the arcing great-circle camera flights.
   - `session.ts`, `exif.ts` and `cities.ts` cover the admin cookie, reading photo GPS and dates, and city search.
-- **`src/components/globe/`** is the Three.js engine. It renders the globe off-screen, storing each country's unlock progress in the alpha channel. A second pass then draws locked pixels as glyphs and lets unlocked pixels show through, cell by cell, with a shimmer at the edge.
+- **`src/components/globe/`** is the Three.js engine. It renders the globe off-screen, storing each country's unlock progress in the alpha channel. A second pass then draws locked pixels as glyphs and lets unlocked pixels show through. The reveal sweeps west to east, glyph by glyph, with a shimmer at the front. Each browser plays a country's unlock once, remembered in `localStorage`.
 - **`src/lib/repository/`** holds the Supabase store and the local JSON store, both behind one interface.
 - **`src/app/`** has the pages: `/` landing, `/explore`, `/trips/[id]` (story mode) and `/admin`.
 
@@ -63,9 +63,11 @@ Working end to end:
 
 Not built yet:
 
+- Weaving photos between paragraphs (for now a place's story comes first, then its photos in upload order)
+- Uploading straight from the browser to Supabase Storage. Photos currently pass through a server action, so they're resized in the browser first to stay under Vercel's ~4.5 MB request limit; HEIC files that Chrome can't decode aren't resized.
 - Editing or deleting trips, places and photos
 - A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)
-- Reordering photos or placing them between paragraphs
+- Reordering photos
 - Sharper imagery when zoomed into a city (the earth texture is 2048px)
 - Route lines between a trip's stops
 - An offline upload queue

@@ -1,7 +1,5 @@
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifySessionToken } from "./session";
-
-export const sessionSecret = () => process.env.SESSION_SECRET ?? "";
+import { SESSION_COOKIE, sessionSecret, verifySessionToken } from "./session";
 
 export async function isAdmin(): Promise<boolean> {
   return verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value, sessionSecret());

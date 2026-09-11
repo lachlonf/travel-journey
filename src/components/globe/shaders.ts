@@ -12,7 +12,10 @@ void main() {
 }
 `;
 
-/** Pass 1: the lit earth in rgb, and this pixel's country unlock progress in alpha. */
+/**
+ * Pass 1: the lit earth in rgb, and how far this pixel's country has unlocked in alpha.
+ * unlockTex holds, per country: r = progress, g = west edge, b = width (texture fractions).
+ */
 export const globeFragment = /* glsl */ `
 uniform sampler2D earthMap;
 uniform sampler2D countryMask;
@@ -24,7 +27,11 @@ varying vec3 vViewDir;
 
 void main() {
   float country = floor(texture2D(countryMask, vUv).r * 255.0 + 0.5);
-  float unlock = country > 0.0 ? texture2D(unlockTex, vec2((country + 0.5) / 256.0, 0.5)).r : 0.0;
+  vec4 info = country > 0.0 ? texture2D(unlockTex, vec2((country + 0.5) / 256.0, 0.5)) : vec4(0.0);
+  // Sweep west to east: the west edge starts at once, the east edge finishes last.
+  // The ASCII pass then breaks the front up glyph by glyph.
+  float across = clamp((vUv.x - info.g) / max(info.b, 1.0 / 255.0), 0.0, 1.0);
+  float unlock = clamp(info.r * 1.6 - across * 0.6, 0.0, 1.0);
 
   float facing = clamp(dot(normalize(vNormal), normalize(vViewDir)), 0.0, 1.0);
   // Brighter land and dimmer sea, so continents come through as denser glyphs

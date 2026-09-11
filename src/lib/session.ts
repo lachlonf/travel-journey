@@ -3,6 +3,8 @@
 export const SESSION_COOKIE = "journey_admin";
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+export const sessionSecret = () => process.env.SESSION_SECRET ?? "";
+
 const encoder = new TextEncoder();
 
 async function hmac(secret: string, message: string): Promise<Uint8Array> {
