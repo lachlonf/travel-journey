@@ -5,7 +5,7 @@ const place = (p: Partial<Place> & Pick<Place, "id" | "name" | "lat" | "lng" | "
   parentId: null,
   tripId: null,
   visitedOn: [],
-  story: "",
+  storyBlocks: [],
   ...p,
 });
 
@@ -15,7 +15,21 @@ export const fixture: JourneyData = {
   ],
   places: [
     place({ id: "cusco", name: "Cusco", lat: -13.53195, lng: -71.96746, countryCode: "PE", tripId: "t-sa", visitedOn: ["2025-06-20"] }),
-    place({ id: "huaraz", name: "Huaraz", lat: -9.52614, lng: -77.52869, countryCode: "PE", tripId: "t-sa", visitedOn: ["2025-06-05"] }),
+    place({
+      id: "huaraz",
+      name: "Huaraz",
+      lat: -9.52614,
+      lng: -77.52869,
+      countryCode: "PE",
+      tripId: "t-sa",
+      visitedOn: ["2025-06-05"],
+      storyBlocks: [
+        { type: "text", text: "Arrived in the rain." },
+        { type: "photo", photoId: "p2" },
+        { type: "text", text: "The lake was worth it." },
+        { type: "photo", photoId: "deleted" },
+      ],
+    }),
     place({
       id: "laguna513",
       kind: "poi",
@@ -32,7 +46,8 @@ export const fixture: JourneyData = {
     place({ id: "orphan", kind: "poi", name: "Lost spot", lat: -10, lng: -76, countryCode: "PE", parentId: "missing" }),
   ],
   photos: [
-    { id: "p1", placeId: "huaraz", url: "/a.jpg", caption: "", takenAt: null, lat: null, lng: null, sortOrder: 2 },
-    { id: "p2", placeId: "huaraz", url: "/b.jpg", caption: "", takenAt: null, lat: null, lng: null, sortOrder: 1 },
+    // p1 is in no block, so it's appended to Huaraz's story.
+    { id: "p1", placeId: "huaraz", url: "/a.jpg", caption: "", takenAt: null, lat: null, lng: null },
+    { id: "p2", placeId: "huaraz", url: "/b.jpg", caption: "", takenAt: null, lat: null, lng: null },
   ],
 };

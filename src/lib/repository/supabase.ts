@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import type { Photo, Place, Trip } from "../types";
+import type { Photo, Place, StoryBlock, Trip } from "../types";
 import { extensionFor, type JourneyRepository } from "./types";
 
 export const PHOTO_BUCKET = "photos";
@@ -24,7 +24,7 @@ interface PlaceRow {
   parent_id: string | null;
   trip_id: string | null;
   visited_on: string[];
-  story: string;
+  story_blocks: StoryBlock[];
 }
 
 interface PhotoRow {
@@ -35,7 +35,6 @@ interface PhotoRow {
   taken_at: string | null;
   lat: number | null;
   lng: number | null;
-  sort_order: number;
 }
 
 const tripFromRow = (r: TripRow): Trip => ({
@@ -56,7 +55,7 @@ const placeFromRow = (r: PlaceRow): Place => ({
   parentId: r.parent_id,
   tripId: r.trip_id,
   visitedOn: r.visited_on,
-  story: r.story,
+  storyBlocks: r.story_blocks,
 });
 
 function unwrap<T>({ data, error }: { data: unknown; error: { message: string } | null }): T {
@@ -76,7 +75,6 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
     takenAt: r.taken_at,
     lat: r.lat,
     lng: r.lng,
-    sortOrder: r.sort_order,
   });
 
   return {
@@ -108,7 +106,7 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
         parent_id: input.parentId,
         trip_id: input.tripId,
         visited_on: input.visitedOn,
-        story: input.story,
+        story_blocks: input.storyBlocks,
       };
       return placeFromRow(unwrap<PlaceRow>(await client.from("places").insert(row).select().single()));
     },
@@ -125,7 +123,6 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
         taken_at: input.takenAt,
         lat: input.lat,
         lng: input.lng,
-        sort_order: input.sortOrder,
       };
       return photoFromRow(unwrap<PhotoRow>(await client.from("photos").insert(row).select().single()));
     },

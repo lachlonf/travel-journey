@@ -67,6 +67,12 @@ describe("addPlace", () => {
     expect(tripStops(await journey(), trip.id).map((p) => p.name)).toEqual(["Laguna 513"]);
   });
 
+  it("turns the place's story text into a single text block", async () => {
+    const huaraz = unwrap(await commands().addPlace(city({ story: "Arrived in the rain.\n\nThe lake was worth it." })));
+
+    expect((await journey()).storyByPlace.get(huaraz.id)).toEqual([{ type: "text", text: "Arrived in the rain.\n\nThe lake was worth it." }]);
+  });
+
   it("refuses a city that's already on the map, pointing at the existing city", async () => {
     const huaraz = unwrap(await commands().addPlace(city()));
 
@@ -120,15 +126,16 @@ describe("validation", () => {
 });
 
 describe("addPhoto", () => {
-  it("adds photos to a place in upload order", async () => {
-    const place = unwrap(await commands().addPlace(city()));
+  it("adds photos to the end of the place's story, in upload order", async () => {
+    const place = unwrap(await commands().addPlace(city({ story: "We made it to the lake." })));
 
     const first = await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: "2025-06-07", lat: -9.2, lng: -77.5, file: jpeg });
     const second = await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg });
 
     expect(first.ok && second.ok).toBe(true);
-    const photos = (await journey()).photosByPlace.get(place.id)!;
-    expect(photos.map((p) => [p.caption, p.takenAt, p.lat, p.lng])).toEqual([
+    const story = (await journey()).storyByPlace.get(place.id)!;
+    expect(story.map((block) => (block.type === "text" ? block.text : [block.photo.caption, block.photo.takenAt, block.photo.lat, block.photo.lng]))).toEqual([
+      "We made it to the lake.",
       ["the lake", "2025-06-07", -9.2, -77.5],
       ["the climb", null, null, null],
     ]);

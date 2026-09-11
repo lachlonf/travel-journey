@@ -19,7 +19,12 @@
       "parentId": null,
       "tripId": "sample-peru",
       "visitedOn": [],
-      "story": "A sample city. Separate paragraphs with a blank line.\n\nCities can hold their own photos, and Laguna 513 sits inside Huaraz as a specific spot."
+      "storyBlocks": [
+        {
+          "type": "text",
+          "text": "A sample city. Separate paragraphs with a blank line.\n\nCities can hold their own photos, and Laguna 513 sits inside Huaraz as a specific spot."
+        }
+      ]
     },
     {
       "id": "sample-laguna-513",
@@ -31,7 +36,12 @@
       "parentId": "sample-huaraz",
       "tripId": "sample-peru",
       "visitedOn": [],
-      "story": "A sample specific spot. From the country view it's folded into the Huaraz pin."
+      "storyBlocks": [
+        {
+          "type": "text",
+          "text": "A sample specific spot. From the country view it's folded into the Huaraz pin."
+        }
+      ]
     },
     {
       "id": "sample-cusco",
@@ -43,7 +53,12 @@
       "parentId": null,
       "tripId": "sample-peru",
       "visitedOn": [],
-      "story": "A sample city with no specific spots, so clicking it opens the story straight away."
+      "storyBlocks": [
+        {
+          "type": "text",
+          "text": "A sample city with no specific spots, so clicking it opens the story straight away."
+        }
+      ]
     }
   ],
   "photos": []

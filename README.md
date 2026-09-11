@@ -26,7 +26,7 @@ The admin is at http://localhost:3000/admin. A `.env.local` was created with `AD
 ## Connect Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. In the SQL editor, run `supabase/migrations/0001_init.sql`. It creates the `trips`, `places` and `photos` tables, plus a public `photos` storage bucket.
+2. In the SQL editor, run the files in `supabase/migrations/` in order. `0001_init.sql` creates the `trips`, `places` and `photos` tables, plus a public `photos` storage bucket. `0002_story_blocks.sql` turns each place's story into ordered text and photo blocks, converting any existing rows.
 3. From Project Settings → API, copy the project URL and the `service_role` key into `.env.local`:
    ```
    SUPABASE_URL=https://xxxx.supabase.co
@@ -63,11 +63,10 @@ Working end to end:
 
 Not built yet:
 
-- Weaving photos between paragraphs (for now a place's story comes first, then its photos in upload order)
+- Arranging a place's story in the admin. Stories are ordered text and photo blocks, but for now the admin writes the story text as one block and new photos land at the end.
 - Uploading straight from the browser to Supabase Storage. Photos currently pass through a server action, so they're resized in the browser first to stay under Vercel's ~4.5 MB request limit; HEIC files that Chrome can't decode aren't resized.
 - Editing or deleting trips, places and photos
 - A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)
-- Reordering photos
 - Sharper imagery when zoomed into a city (the earth texture is 2048px)
 - Route lines between a trip's stops
 - An offline upload queue

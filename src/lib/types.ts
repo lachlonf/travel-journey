@@ -9,6 +9,9 @@ export interface Trip {
   endDate: string | null;
 }
 
+/** One piece of a place's story: a text passage (blank lines split paragraphs) or one of the place's photos. */
+export type StoryBlock = { type: "text"; text: string } | { type: "photo"; photoId: string };
+
 /**
  * A checkpoint on the globe. Cities are level-2 pins; POIs are level-3 pins
  * that get absorbed into their parent city when zoomed out.
@@ -26,7 +29,8 @@ export interface Place {
   tripId: string | null;
   /** ISO dates (YYYY-MM-DD). A list, because you can go back. */
   visitedOn: string[];
-  story: string;
+  /** In reading order. A photo's position in the story is where its block sits. */
+  storyBlocks: StoryBlock[];
 }
 
 export interface Photo {
@@ -37,7 +41,6 @@ export interface Photo {
   takenAt: string | null;
   lat: number | null;
   lng: number | null;
-  sortOrder: number;
 }
 
 export interface JourneyData {

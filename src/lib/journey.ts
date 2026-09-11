@@ -1,7 +1,7 @@
 import countries from "i18n-iso-countries";
 import en from "i18n-iso-countries/langs/en.json";
 import { centroid, spreadKm } from "./geo";
-import type { JourneyData, LatLng, Photo, Place, Trip } from "./types";
+import type { JourneyData, LatLng, Photo, Place, StoryBlock, Trip } from "./types";
 
 countries.registerLocale(en);
 
@@ -25,6 +25,9 @@ export interface CountryNode {
   tripIds: string[];
 }
 
+/** A story block as visitors read it: photo blocks carry the photo itself. */
+export type ResolvedStoryBlock = Extract<StoryBlock, { type: "text" }> | { type: "photo"; photo: Photo };
+
 /** The read-side shape of the journey: countries → cities → POIs, plus lookups. */
 export interface Journey {
   data: JourneyData;
@@ -33,11 +36,33 @@ export interface Journey {
   placeById: Map<string, Place>;
   /** Every place id (city or POI) → the city node it lives under. */
   cityOf: Map<string, CityNode>;
+  /** Each place's resolved story, the only thing the story panel renders. */
+  storyByPlace: Map<string, ResolvedStoryBlock[]>;
   photosByPlace: Map<string, Photo[]>;
   tripById: Map<string, Trip>;
 }
 
 const firstVisit = (p: Place) => [...p.visitedOn].sort()[0];
+
+function resolveStory(place: Place, photos: readonly Photo[]): ResolvedStoryBlock[] {
+  const photoById = new Map(photos.map((p) => [p.id, p]));
+  const shown = new Set<Photo>();
+  const story: ResolvedStoryBlock[] = [];
+  for (const block of place.storyBlocks) {
+    if (block.type === "text") {
+      story.push({ type: "text", text: block.text });
+      continue;
+    }
+    // A block for a photo that's gone is skipped rather than shown broken.
+    const photo = photoById.get(block.photoId);
+    if (!photo || shown.has(photo)) continue;
+    shown.add(photo);
+    story.push({ type: "photo", photo });
+  }
+  // Nothing uploaded is ever hidden: photos no block references go at the end, in upload order.
+  for (const photo of photos) if (!shown.has(photo)) story.push({ type: "photo", photo });
+  return story;
+}
 
 export function buildJourney(data: JourneyData): Journey {
   const placeById = new Map(data.places.map((p) => [p.id, p]));
@@ -77,9 +102,16 @@ export function buildJourney(data: JourneyData): Journey {
   });
   countryNodes.sort((a, b) => a.name.localeCompare(b.name));
 
+  const uploadedByPlace = new Map<string, Photo[]>();
+  for (const photo of data.photos) uploadedByPlace.set(photo.placeId, [...(uploadedByPlace.get(photo.placeId) ?? []), photo]);
+  const storyByPlace = new Map(data.places.map((p) => [p.id, resolveStory(p, uploadedByPlace.get(p.id) ?? [])]));
+
+  // A photo's position is where the story shows it.
   const photosByPlace = new Map<string, Photo[]>();
-  for (const photo of data.photos) photosByPlace.set(photo.placeId, [...(photosByPlace.get(photo.placeId) ?? []), photo]);
-  for (const photos of photosByPlace.values()) photos.sort((a, b) => a.sortOrder - b.sortOrder);
+  for (const [placeId, story] of storyByPlace) {
+    const photos = story.flatMap((block) => (block.type === "photo" ? [block.photo] : []));
+    if (photos.length) photosByPlace.set(placeId, photos);
+  }
 
   return {
     data,
@@ -87,6 +119,7 @@ export function buildJourney(data: JourneyData): Journey {
     countryByCode: new Map(countryNodes.map((c) => [c.code, c])),
     placeById,
     cityOf,
+    storyByPlace,
     photosByPlace,
     tripById: new Map(data.trips.map((t) => [t.id, t])),
   };

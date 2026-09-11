@@ -121,11 +121,12 @@ export function createAdminCommands(repository: JourneyRepository) {
               // Just the grouping the spot folds into, not a stop you chose: no trip, no visit.
               tripId: null,
               visitedOn: [],
-              story: "",
+              storyBlocks: [],
             })
           ).id;
       }
 
+      const story = String(input.story ?? "");
       return ok(
         await repository.createPlace({
           kind: input.kind,
@@ -136,7 +137,7 @@ export function createAdminCommands(repository: JourneyRepository) {
           parentId,
           tripId,
           visitedOn: input.visitedOn ? [input.visitedOn] : [],
-          story: String(input.story ?? ""),
+          storyBlocks: story.trim() ? [{ type: "text", text: story }] : [],
         }),
       );
     },
@@ -153,6 +154,7 @@ export function createAdminCommands(repository: JourneyRepository) {
       const data = await repository.load();
       if (!data.places.some((p) => p.id === input.placeId)) return fail({ code: "unknown-place", message: "That place doesn't exist." });
 
+      // No block for it yet: the read model appends photos no block references, so it lands at the end of the story.
       const located = isValidLatLng(input.lat, input.lng);
       return ok(
         await repository.addPhoto(
@@ -162,7 +164,6 @@ export function createAdminCommands(repository: JourneyRepository) {
             takenAt,
             lat: located ? input.lat : null,
             lng: located ? input.lng : null,
-            sortOrder: data.photos.filter((p) => p.placeId === input.placeId).length,
           },
           file,
         ),

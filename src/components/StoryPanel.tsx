@@ -19,8 +19,8 @@ export function StoryPanel({ journey, placeId, showTripLink = false, onClose, on
 
   const country = journey.countryByCode.get(city.place.countryCode);
   const trip = place.tripId ? journey.tripById.get(place.tripId) : undefined;
-  const photos = journey.photosByPlace.get(place.id) ?? [];
-  const body = paragraphs(place.story);
+  // Blank text blocks would only leave a gap.
+  const story = (journey.storyByPlace.get(place.id) ?? []).filter((block) => block.type === "photo" || paragraphs(block.text).length > 0);
   const nearby = place.kind === "city" ? city.pois : [city.place, ...city.pois.filter((p) => p.id !== place.id)];
   const where = [place.kind === "poi" ? city.place.name : null, country?.name].filter(Boolean).join(", ");
 
@@ -46,26 +46,26 @@ export function StoryPanel({ journey, placeId, showTripLink = false, onClose, on
           </Link>
         )}
 
-        {body.length > 0 && (
-          <div className="story-body">
-            {body.map((paragraph, i) => (
-              <p key={i}>{paragraph}</p>
-            ))}
-          </div>
+        {story.map((block, i) =>
+          block.type === "text" ? (
+            <div key={i} className="story-body">
+              {paragraphs(block.text).map((paragraph, j) => (
+                <p key={j}>{paragraph}</p>
+              ))}
+            </div>
+          ) : (
+            <figure key={block.photo.id} className="story-photo">
+              {/* Photos come from storage at arbitrary sizes, so a plain img rather than next/image. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={block.photo.url} alt={block.photo.caption || place.name} loading="lazy" />
+              {(block.photo.caption || block.photo.takenAt) && (
+                <figcaption>{[block.photo.caption, block.photo.takenAt && formatDate(block.photo.takenAt)].filter(Boolean).join(" · ")}</figcaption>
+              )}
+            </figure>
+          ),
         )}
 
-        {photos.map((photo) => (
-          <figure key={photo.id} className="story-photo">
-            {/* Photos come from storage at arbitrary sizes, so a plain img rather than next/image. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo.url} alt={photo.caption || place.name} loading="lazy" />
-            {(photo.caption || photo.takenAt) && (
-              <figcaption>{[photo.caption, photo.takenAt && formatDate(photo.takenAt)].filter(Boolean).join(" · ")}</figcaption>
-            )}
-          </figure>
-        ))}
-
-        {body.length === 0 && photos.length === 0 && <p className="story-empty">Nothing written here yet.</p>}
+        {story.length === 0 && <p className="story-empty">Nothing written here yet.</p>}
 
         {onOpenPlace && nearby.length > 0 && (
           <nav className="story-related" aria-label="Nearby">

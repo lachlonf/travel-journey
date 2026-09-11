@@ -28,9 +28,36 @@ describe("buildJourney", () => {
     expect(country("AU").tripIds).toEqual([]);
   });
 
-  it("indexes photos by place in sort order", () => {
+  it("indexes photos by place in the order their story shows them", () => {
     expect(journey.photosByPlace.get("huaraz")!.map((p) => p.id)).toEqual(["p2", "p1"]);
     expect(journey.photosByPlace.get("cusco")).toBeUndefined();
+  });
+});
+
+describe("resolved stories", () => {
+  const story = (placeId: string) =>
+    journey.storyByPlace.get(placeId)!.map((block) => (block.type === "text" ? ["text", block.text] : ["photo", block.photo.id]));
+
+  it("reads a place's story blocks in order, with photo blocks resolved to photos", () => {
+    expect(story("huaraz").slice(0, 3)).toEqual([
+      ["text", "Arrived in the rain."],
+      ["photo", "p2"],
+      ["text", "The lake was worth it."],
+    ]);
+    expect(journey.storyByPlace.get("huaraz")![1]).toMatchObject({ photo: { url: "/b.jpg" } });
+  });
+
+  it("drops blocks pointing at missing photos and appends photos no block references", () => {
+    expect(story("huaraz")).toEqual([
+      ["text", "Arrived in the rain."],
+      ["photo", "p2"],
+      ["text", "The lake was worth it."],
+      ["photo", "p1"],
+    ]);
+  });
+
+  it("is empty for a place with nothing written or uploaded", () => {
+    expect(story("cusco")).toEqual([]);
   });
 });
 
