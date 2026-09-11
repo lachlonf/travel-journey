@@ -1,0 +1,90 @@
+import { describe, expect, it } from "vitest";
+import { fixture } from "./__fixtures__/journey";
+import { buildJourney } from "./journey";
+import { cameraTarget, initialView, navigate, visiblePins, type View } from "./navigation";
+
+const journey = buildJourney(fixture);
+const go = (view: View, ...actions: Parameters<typeof navigate>[2][]) =>
+  actions.reduce((v, a) => navigate(journey, v, a), view);
+
+describe("navigate", () => {
+  it("drills from world to country to city", () => {
+    const inCountry = go(initialView, { type: "openCountry", country: "PE" });
+    expect(inCountry).toEqual({ nav: { level: "country", country: "PE" }, openPlaceId: null });
+
+    const inCity = go(inCountry, { type: "openCity", cityId: "huaraz" });
+    expect(inCity).toEqual({ nav: { level: "city", country: "PE", cityId: "huaraz" }, openPlaceId: null });
+  });
+
+  it("opens a city's story straight away when it has no POIs to pick from", () => {
+    expect(go(initialView, { type: "openCity", cityId: "cusco" })).toEqual({
+      nav: { level: "city", country: "PE", cityId: "cusco" },
+      openPlaceId: "cusco",
+    });
+  });
+
+  it("jumps straight to any place, landing on its city", () => {
+    expect(go(initialView, { type: "openPlace", placeId: "laguna513" })).toEqual({
+      nav: { level: "city", country: "PE", cityId: "huaraz" },
+      openPlaceId: "laguna513",
+    });
+    expect(go(initialView, { type: "openPlace", placeId: "sydney" }).nav).toEqual({
+      level: "city",
+      country: "AU",
+      cityId: "sydney",
+    });
+  });
+
+  it("backs out one step at a time: story, then city, then country", () => {
+    const deep = go(initialView, { type: "openPlace", placeId: "laguna513" });
+    const closed = go(deep, { type: "back" });
+    expect(closed).toEqual({ ...deep, openPlaceId: null });
+    expect(go(closed, { type: "back" }).nav).toEqual({ level: "country", country: "PE" });
+    expect(go(closed, { type: "back" }, { type: "back" }).nav).toEqual({ level: "world" });
+    expect(go(initialView, { type: "back" })).toBe(initialView);
+  });
+
+  it("ignores unknown targets", () => {
+    expect(go(initialView, { type: "openCountry", country: "FR" })).toBe(initialView);
+    expect(go(initialView, { type: "openPlace", placeId: "nope" })).toBe(initialView);
+  });
+});
+
+describe("visiblePins", () => {
+  it("shows countries at world level", () => {
+    expect(visiblePins(journey, { level: "world" }).map((p) => [p.kind, p.id])).toEqual([
+      ["country", "AU"],
+      ["country", "BO"],
+      ["country", "PE"],
+    ]);
+  });
+
+  it("shows cities at country level, with POIs absorbed", () => {
+    const ids = visiblePins(journey, { level: "country", country: "PE" }).map((p) => p.id);
+    expect(ids.sort()).toEqual(["cusco", "huaraz", "orphan"]);
+  });
+
+  it("shows the city and its POIs at city level", () => {
+    expect(visiblePins(journey, { level: "city", country: "PE", cityId: "huaraz" }).map((p) => [p.kind, p.id])).toEqual([
+      ["city", "huaraz"],
+      ["poi", "laguna513"],
+    ]);
+  });
+});
+
+describe("cameraTarget", () => {
+  it("gets closer at each level", () => {
+    const world = cameraTarget(journey, { level: "world" });
+    const country = cameraTarget(journey, { level: "country", country: "PE" });
+    const city = cameraTarget(journey, { level: "city", country: "PE", cityId: "huaraz" });
+    expect(world.altitude).toBeGreaterThan(country.altitude);
+    expect(country.altitude).toBeGreaterThan(city.altitude);
+  });
+
+  it("keeps the current direction at world level and centres on the places below", () => {
+    expect(cameraTarget(journey, { level: "world" })).toMatchObject({ lat: null, lng: null });
+    const city = cameraTarget(journey, { level: "city", country: "PE", cityId: "huaraz" });
+    expect(Math.abs(city.lat! - -9.37)).toBeLessThan(0.1);
+    expect(Math.abs(city.lng! - -77.54)).toBeLessThan(0.1);
+  });
+});

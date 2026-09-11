@@ -1,0 +1,50 @@
+{
+  "trips": [
+    {
+      "id": "sample-peru",
+      "name": "Peru (sample trip)",
+      "story": "This is sample data from data/seed.json, here so the globe has something to show before you add your own.\n\nOnce you connect Supabase, the site reads from the database instead and this file is ignored.",
+      "startDate": null,
+      "endDate": null
+    }
+  ],
+  "places": [
+    {
+      "id": "sample-huaraz",
+      "kind": "city",
+      "name": "Huaraz",
+      "lat": -9.52614,
+      "lng": -77.52869,
+      "countryCode": "PE",
+      "parentId": null,
+      "tripId": "sample-peru",
+      "visitedOn": [],
+      "story": "A sample city. Separate paragraphs with a blank line.\n\nCities can hold their own photos, and Laguna 513 sits inside Huaraz as a specific spot."
+    },
+    {
+      "id": "sample-laguna-513",
+      "kind": "poi",
+      "name": "Laguna 513",
+      "lat": -9.2112,
+      "lng": -77.5466,
+      "countryCode": "PE",
+      "parentId": "sample-huaraz",
+      "tripId": "sample-peru",
+      "visitedOn": [],
+      "story": "A sample specific spot. From the country view it's folded into the Huaraz pin."
+    },
+    {
+      "id": "sample-cusco",
+      "kind": "city",
+      "name": "Cusco",
+      "lat": -13.53195,
+      "lng": -71.96746,
+      "countryCode": "PE",
+      "parentId": null,
+      "tripId": "sample-peru",
+      "visitedOn": [],
+      "story": "A sample city with no specific spots, so clicking it opens the story straight away."
+    }
+  ],
+  "photos": []
+}
