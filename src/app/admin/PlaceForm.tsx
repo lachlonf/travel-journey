@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import type { CityResult } from "@/app/api/cities/route";
+import type { PlaceInput } from "@/lib/admin-commands";
 import { isValidLatLng } from "@/lib/geo";
 import type { Trip } from "@/lib/types";
-import { createPlace, type PlaceInput } from "./actions";
+import { createPlace } from "./actions";
 import { CitySearch } from "./CitySearch";
 import { FormStatus } from "./FormStatus";
 import { PhotoPicker, releasePreviews, uploadPhotos, type PendingPhoto } from "./photos";
@@ -105,11 +106,11 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
 
     try {
       const result = await createPlace(input);
-      if ("error" in result) {
-        setStatus({ error: result.error });
+      if (!result.ok) {
+        setStatus({ error: result.error.message });
         return;
       }
-      const failed = await uploadPhotos(result.placeId, photos, (i, total) =>
+      const failed = await uploadPhotos(result.value.id, photos, (i, total) =>
         setStatus({ message: `Uploading photo ${i + 1} of ${total}…` }),
       );
       setStatus(failed.length ? { error: `Saved ${name}, but some photos failed: ${failed.join(", ")}` } : { message: `Saved ${name}.` });

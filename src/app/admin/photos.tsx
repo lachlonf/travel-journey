@@ -56,7 +56,7 @@ export async function uploadPhotos(
     }
     try {
       const result = await addPhoto(body);
-      if ("error" in result) failed.push(`${photo.file.name} (${result.error})`);
+      if (!result.ok) failed.push(`${photo.file.name} (${result.error.message})`);
     } catch {
       failed.push(`${photo.file.name} (upload failed, possibly too large)`);
     }

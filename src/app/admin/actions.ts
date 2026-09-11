@@ -3,35 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createAdminCommands, type CommandResult, type PlaceInput } from "@/lib/admin-commands";
 import { requireAdmin } from "@/lib/auth";
-import { isValidLatLng } from "@/lib/geo";
-import { findCityPlace } from "@/lib/journey";
 import { getRepository } from "@/lib/repository";
-import { isAllowedImageType } from "@/lib/repository/types";
 import { createSessionToken, passwordMatches, SESSION_COOKIE, SESSION_TTL_MS, sessionSecret } from "@/lib/session";
-import type { PlaceKind } from "@/lib/types";
+import type { Photo, Place, Trip } from "@/lib/types";
 
 export interface FormState {
   error: string | null;
   message?: string;
 }
 
-export interface PlaceInput {
-  kind: PlaceKind;
-  name: string;
-  lat: number;
-  lng: number;
-  countryCode: string;
-  tripId: string | null;
-  visitedOn: string | null;
-  story: string;
-  /** For POIs: the city it folds into. Matched to an existing city by name, otherwise created. */
-  parent: { name: string; lat: number; lng: number } | null;
-}
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const field = (formData: FormData, key: string) => String(formData.get(key) ?? "").trim();
 
+const commands = () => createAdminCommands(getRepository());
 const revalidateSite = () => revalidatePath("/", "layout");
 
 export async function login(_state: FormState, formData: FormData): Promise<FormState> {
@@ -61,107 +46,38 @@ export async function logout(): Promise<void> {
   redirect("/admin/login");
 }
 
-export async function createTrip(_state: FormState, formData: FormData): Promise<FormState> {
+// Every action below does the same four things: check the session, run one command, revalidate, return its result.
+
+export async function createTrip(_state: unknown, formData: FormData): Promise<CommandResult<Trip>> {
   await requireAdmin();
-  const name = field(formData, "name");
-  const startDate = field(formData, "startDate") || null;
-  const endDate = field(formData, "endDate") || null;
-
-  if (!name) return { error: "A trip needs a name." };
-  if ([startDate, endDate].some((d) => d !== null && !ISO_DATE.test(d))) return { error: "Dates must be YYYY-MM-DD." };
-  if (startDate && endDate && endDate < startDate) return { error: "The trip ends before it starts." };
-
-  await getRepository().createTrip({ name, story: field(formData, "story"), startDate, endDate });
-  revalidateSite();
-  return { error: null, message: `Added “${name}”.` };
-}
-
-export async function createPlace(input: PlaceInput): Promise<{ error: string } | { placeId: string }> {
-  await requireAdmin();
-  if (!input || typeof input !== "object") return { error: "Nothing to save." };
-
-  const repository = getRepository();
-  const data = await repository.load();
-  const name = String(input.name ?? "").trim();
-  const countryCode = String(input.countryCode ?? "").trim().toUpperCase();
-  const tripId = input.tripId || null;
-  const visitedOn = input.visitedOn ? [input.visitedOn] : [];
-
-  if (input.kind !== "city" && input.kind !== "poi") return { error: "Choose city or specific spot." };
-  if (!name) return { error: "The place needs a name." };
-  if (!isValidLatLng(input.lat, input.lng)) return { error: "Those coordinates aren't on Earth." };
-  if (!/^[A-Z]{2}$/.test(countryCode)) return { error: "Country must be a two-letter code, like PE." };
-  if (input.visitedOn && !ISO_DATE.test(input.visitedOn)) return { error: "Visit date must be YYYY-MM-DD." };
-  if (tripId && !data.trips.some((t) => t.id === tripId)) return { error: "That trip doesn't exist." };
-  if (input.kind === "city" && findCityPlace(data.places, name, countryCode)) {
-    return { error: `${name} is already on the map. Add photos to it below instead.` };
-  }
-
-  let parentId: string | null = null;
-  if (input.kind === "poi") {
-    const parentName = String(input.parent?.name ?? "").trim();
-    if (!input.parent || !parentName || !isValidLatLng(input.parent.lat, input.parent.lng)) {
-      return { error: "A specific spot needs a city to fold into." };
-    }
-    const existing = findCityPlace(data.places, parentName, countryCode);
-    parentId =
-      existing?.id ??
-      (
-        await repository.createPlace({
-          kind: "city",
-          name: parentName,
-          lat: input.parent.lat,
-          lng: input.parent.lng,
-          countryCode,
-          parentId: null,
-          // Just the grouping the spot folds into, not a stop you chose: no trip, no visit.
-          tripId: null,
-          visitedOn: [],
-          story: "",
-        })
-      ).id;
-  }
-
-  const place = await repository.createPlace({
-    kind: input.kind,
-    name,
-    lat: input.lat,
-    lng: input.lng,
-    countryCode,
-    parentId,
-    tripId,
-    visitedOn,
-    story: String(input.story ?? ""),
+  const result = await commands().createTrip({
+    name: field(formData, "name"),
+    story: field(formData, "story"),
+    startDate: field(formData, "startDate") || null,
+    endDate: field(formData, "endDate") || null,
   });
-  revalidateSite();
-  return { placeId: place.id };
+  if (result.ok) revalidateSite();
+  return result;
 }
 
-export async function addPhoto(formData: FormData): Promise<{ error: string } | { photoId: string }> {
+export async function createPlace(input: PlaceInput): Promise<CommandResult<Place>> {
+  await requireAdmin();
+  const result = await commands().addPlace(input);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function addPhoto(formData: FormData): Promise<CommandResult<Photo>> {
   await requireAdmin();
   const file = formData.get("file");
-  const placeId = field(formData, "placeId");
-  const takenAt = field(formData, "takenAt") || null;
-  const lat = Number(field(formData, "lat") || Number.NaN);
-  const lng = Number(field(formData, "lng") || Number.NaN);
-
-  if (!(file instanceof File) || !isAllowedImageType(file.type)) return { error: "Only JPEG, PNG, WebP, AVIF or HEIC images." };
-  if (takenAt && !ISO_DATE.test(takenAt)) return { error: "Photo date must be YYYY-MM-DD." };
-
-  const repository = getRepository();
-  const data = await repository.load();
-  if (!data.places.some((p) => p.id === placeId)) return { error: "That place doesn't exist." };
-
-  const photo = await repository.addPhoto(
-    {
-      placeId,
-      caption: field(formData, "caption"),
-      takenAt,
-      ...(isValidLatLng(lat, lng) ? { lat, lng } : { lat: null, lng: null }),
-      sortOrder: data.photos.filter((p) => p.placeId === placeId).length,
-    },
-    { bytes: new Uint8Array(await file.arrayBuffer()), contentType: file.type },
-  );
-  revalidateSite();
-  return { photoId: photo.id };
+  const result = await commands().addPhoto({
+    placeId: field(formData, "placeId"),
+    caption: field(formData, "caption"),
+    takenAt: field(formData, "takenAt") || null,
+    lat: Number(field(formData, "lat") || Number.NaN),
+    lng: Number(field(formData, "lng") || Number.NaN),
+    file: file instanceof File ? { bytes: new Uint8Array(await file.arrayBuffer()), contentType: file.type } : null,
+  });
+  if (result.ok) revalidateSite();
+  return result;
 }

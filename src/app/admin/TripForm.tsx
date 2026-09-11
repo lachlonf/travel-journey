@@ -1,13 +1,13 @@
 "use client";
 
 import { useActionState } from "react";
-import { createTrip, type FormState } from "./actions";
+import type { CommandResult } from "@/lib/admin-commands";
+import type { Trip } from "@/lib/types";
+import { createTrip } from "./actions";
 import { FormStatus } from "./FormStatus";
 
-const initialState: FormState = { error: null };
-
 export function TripForm() {
-  const [state, action, pending] = useActionState(createTrip, initialState);
+  const [result, action, pending] = useActionState<CommandResult<Trip> | null, FormData>(createTrip, null);
 
   return (
     <form action={action} className="form">
@@ -29,7 +29,10 @@ export function TripForm() {
         <label htmlFor="trip-story">Story</label>
         <textarea id="trip-story" name="story" className="input" placeholder="How it started. Blank lines start new paragraphs." />
       </div>
-      <FormStatus error={state.error} message={state.message} />
+      <FormStatus
+        error={result && !result.ok ? result.error.message : null}
+        message={result?.ok ? `Added “${result.value.name}”.` : undefined}
+      />
       <div>
         <button className="btn btn-primary" disabled={pending}>
           {pending ? "Saving…" : "Add trip"}
