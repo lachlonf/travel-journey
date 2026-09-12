@@ -1,6 +1,6 @@
 import { isValidLatLng } from "./geo";
 import { findCityPlace } from "./journey";
-import { isAllowedImageType, type JourneyRepository, type UploadedFile } from "./repository/types";
+import { isAllowedImageType, type JourneyRepository, type NewTrip, type UploadedFile } from "./repository/types";
 import type { JourneyData, Photo, Place, PlaceKind, Trip } from "./types";
 
 /** A refusal the owner can act on. Codes are stable; messages are for people. */
@@ -23,6 +23,11 @@ export interface TripInput {
   story: string;
   startDate: string | null;
   endDate: string | null;
+}
+
+/** A trip as the owner refines it: the same fields as creating one, on a trip that already exists. */
+export interface TripUpdate extends TripInput {
+  id: string;
 }
 
 /** What a place is called and where it sits: the same fields whether you're adding one or correcting one. */
@@ -65,6 +70,23 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value });
 const fail = <T>(error: CommandError): CommandResult<T> => ({ ok: false, error });
 const text = (value: unknown) => String(value ?? "").trim();
+
+/** What creating and refining a trip both check, and the trip they agree on. */
+function validatedTrip(input: TripInput): CommandResult<NewTrip> {
+  const name = text(input.name);
+  const startDate = text(input.startDate) || null;
+  const endDate = text(input.endDate) || null;
+
+  if (!name) return fail({ code: "name-required", message: "A trip needs a name." });
+  if ([startDate, endDate].some((d) => d !== null && !ISO_DATE.test(d))) {
+    return fail({ code: "invalid-date", message: "Dates must be YYYY-MM-DD." });
+  }
+  if (startDate && endDate && endDate < startDate) {
+    return fail({ code: "invalid-date", message: "The trip ends before it starts." });
+  }
+
+  return ok({ name, story: text(input.story), startDate, endDate });
+}
 
 /** What adding and editing a place both check. */
 function placeDetailsError(data: JourneyData, place: PlaceDetails): CommandError | null {
@@ -109,19 +131,28 @@ export function createAdminCommands(repository: JourneyRepository) {
 
   return {
     async createTrip(input: TripInput): Promise<CommandResult<Trip>> {
-      const name = text(input.name);
-      const startDate = text(input.startDate) || null;
-      const endDate = text(input.endDate) || null;
+      const fields = validatedTrip(input);
+      return fields.ok ? ok(await repository.createTrip(fields.value)) : fields;
+    },
 
-      if (!name) return fail({ code: "name-required", message: "A trip needs a name." });
-      if ([startDate, endDate].some((d) => d !== null && !ISO_DATE.test(d))) {
-        return fail({ code: "invalid-date", message: "Dates must be YYYY-MM-DD." });
-      }
-      if (startDate && endDate && endDate < startDate) {
-        return fail({ code: "invalid-date", message: "The trip ends before it starts." });
-      }
+    async updateTrip(input: TripUpdate): Promise<CommandResult<Trip>> {
+      // Server actions take any payload, so an edit may not even be an object.
+      const data = await repository.load();
+      const trip = input && typeof input === "object" ? data.trips.find((t) => t.id === input.id) : undefined;
+      if (!trip) return fail({ code: "unknown-trip", message: "That trip doesn't exist." });
 
-      return ok(await repository.createTrip({ name, story: text(input.story), startDate, endDate }));
+      const fields = validatedTrip(input);
+      return fields.ok ? ok(await repository.updateTrip(trip.id, fields.value)) : fields;
+    },
+
+    /** Dissolves the grouping: the trip goes and its places stay, simply no longer on a trip. */
+    async deleteTrip(id: string): Promise<CommandResult<Trip>> {
+      const data = await repository.load();
+      const trip = data.trips.find((t) => t.id === id);
+      if (!trip) return fail({ code: "unknown-trip", message: "That trip doesn't exist." });
+
+      await repository.deleteTrip(trip.id);
+      return ok(trip);
     },
 
     async addPlace(input: PlaceInput): Promise<CommandResult<Place>> {

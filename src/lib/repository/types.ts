@@ -13,6 +13,10 @@ export interface UploadedFile {
 export interface JourneyRepository {
   load(): Promise<JourneyData>;
   createTrip(input: NewTrip): Promise<Trip>;
+  /** Changes only the fields given. Throws if the trip doesn't exist. */
+  updateTrip(id: string, changes: Partial<NewTrip>): Promise<Trip>;
+  /** Removes the trip and clears it from its places, which stay on the globe. */
+  deleteTrip(id: string): Promise<void>;
   createPlace(input: NewPlace): Promise<Place>;
   /** Changes only the fields given. Throws if the place doesn't exist. */
   updatePlace(id: string, changes: Partial<NewPlace>): Promise<Place>;

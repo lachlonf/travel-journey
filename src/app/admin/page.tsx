@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/auth";
 import { loadJourneyData } from "@/lib/data";
 import { plural } from "@/lib/format";
-import { buildJourney } from "@/lib/journey";
+import { buildJourney, tripStops } from "@/lib/journey";
 import { logout } from "./actions";
 import { PhotoForm } from "./PhotoForm";
 import { PlaceForm } from "./PlaceForm";
 import { TripForm } from "./TripForm";
+import { TripList } from "./TripList";
 
 export default async function AdminPage() {
   if (!(await isAdmin())) redirect("/admin/login");
@@ -57,6 +58,15 @@ export default async function AdminPage() {
       <section className="admin-section">
         <h2>Add photos to a place</h2>
         <PhotoForm places={placeOptions} />
+      </section>
+
+      <section className="admin-section">
+        <h2>Trips</h2>
+        {journey.data.trips.length === 0 ? (
+          <p className="muted">No trips yet.</p>
+        ) : (
+          <TripList trips={journey.data.trips.map((trip) => ({ trip, stops: tripStops(journey, trip.id).length }))} />
+        )}
       </section>
 
       <section className="admin-section">

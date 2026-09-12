@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { Photo, Place, StoryBlock, Trip } from "../types";
-import { extensionFor, type JourneyRepository, type NewPlace } from "./types";
+import { extensionFor, type JourneyRepository, type NewPlace, type NewTrip } from "./types";
 
 export const PHOTO_BUCKET = "photos";
 
@@ -58,6 +58,13 @@ const placeFromRow = (r: PlaceRow): Place => ({
   storyBlocks: r.story_blocks,
 });
 
+const tripColumns = {
+  name: "name",
+  story: "story",
+  startDate: "start_date",
+  endDate: "end_date",
+} as const satisfies Record<keyof NewTrip, keyof TripRow>;
+
 const placeColumns = {
   kind: "kind",
   name: "name",
@@ -71,13 +78,12 @@ const placeColumns = {
 } as const satisfies Record<keyof NewPlace, keyof PlaceRow>;
 
 /** Only the fields given, so an update leaves the rest alone and an id smuggled in with the input is ignored. */
-function placeToRow(place: Partial<NewPlace>): Partial<PlaceRow> {
+function toRow<T, R>(columns: Record<keyof T, keyof R>, value: Partial<T>): Partial<R> {
   const row: Record<string, unknown> = {};
-  for (const [field, column] of Object.entries(placeColumns)) {
-    const value = place[field as keyof NewPlace];
-    if (value !== undefined) row[column] = value;
+  for (const field of Object.keys(columns) as (keyof T)[]) {
+    if (value[field] !== undefined) row[columns[field] as string] = value[field];
   }
-  return row;
+  return row as Partial<R>;
 }
 
 function unwrap<T>({ data, error }: { data: unknown; error: { message: string } | null }): T {
@@ -114,16 +120,28 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
     },
 
     async createTrip(input) {
-      const row = { name: input.name, story: input.story, start_date: input.startDate, end_date: input.endDate };
+      const row = toRow<NewTrip, TripRow>(tripColumns, input);
       return tripFromRow(unwrap<TripRow>(await client.from("trips").insert(row).select().single()));
     },
 
+    async updateTrip(id, changes) {
+      const row = toRow<NewTrip, TripRow>(tripColumns, changes);
+      return tripFromRow(unwrap<TripRow>(await client.from("trips").update(row).eq("id", id).select().single()));
+    },
+
+    async deleteTrip(id) {
+      // places.trip_id is `on delete set null`, so the places stay behind and simply leave the trip.
+      unwrap(await client.from("trips").delete().eq("id", id));
+    },
+
     async createPlace(input) {
-      return placeFromRow(unwrap<PlaceRow>(await client.from("places").insert(placeToRow(input)).select().single()));
+      const row = toRow<NewPlace, PlaceRow>(placeColumns, input);
+      return placeFromRow(unwrap<PlaceRow>(await client.from("places").insert(row).select().single()));
     },
 
     async updatePlace(id, changes) {
-      return placeFromRow(unwrap<PlaceRow>(await client.from("places").update(placeToRow(changes)).eq("id", id).select().single()));
+      const row = toRow<NewPlace, PlaceRow>(placeColumns, changes);
+      return placeFromRow(unwrap<PlaceRow>(await client.from("places").update(row).eq("id", id).select().single()));
     },
 
     async addPhoto(input, file) {

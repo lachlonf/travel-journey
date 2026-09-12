@@ -71,6 +71,20 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
         data.trips.push(trip);
         return trip;
       }),
+    updateTrip: (id, changes) =>
+      update((data) => {
+        const index = data.trips.findIndex((t) => t.id === id);
+        if (index === -1) throw new Error(`No trip with id ${id}.`);
+        const trip = { ...data.trips[index], ...changes, id };
+        data.trips[index] = trip;
+        return trip;
+      }),
+    deleteTrip: (id) =>
+      update((data) => {
+        data.trips = data.trips.filter((t) => t.id !== id);
+        // Dissolving a trip keeps its places: they simply aren't on a trip any more.
+        for (const place of data.places) if (place.tripId === id) place.tripId = null;
+      }),
     createPlace: (input) =>
       update((data) => {
         const place = { ...input, id: randomUUID() };

@@ -52,6 +52,30 @@ describe("local repository", () => {
     await expect(open().updatePlace("nope", { name: "Nowhere" })).rejects.toThrow("No place with id nope");
   });
 
+  it("changes only the fields a trip update gives it", async () => {
+    const trip = await open().createTrip({ name: "Japan 2026", story: "", startDate: null, endDate: null });
+
+    const updated = await open().updateTrip(trip.id, { name: "Japan 2026, the long way", endDate: "2026-04-10" });
+
+    expect(updated).toEqual({ ...trip, name: "Japan 2026, the long way", endDate: "2026-04-10" });
+    expect((await open().load()).trips).toEqual([updated]);
+  });
+
+  it("refuses to update a trip that isn't there", async () => {
+    await expect(open().updateTrip("nope", { name: "Nowhere" })).rejects.toThrow("No trip with id nope");
+  });
+
+  it("keeps a deleted trip's places, no longer on a trip", async () => {
+    const trip = await open().createTrip({ name: "Japan 2026", story: "", startDate: null, endDate: null });
+    const place = await open().createPlace({ ...fixture.places[0], tripId: trip.id });
+
+    await open().deleteTrip(trip.id);
+
+    const data = await open().load();
+    expect(data.trips).toEqual([]);
+    expect(data.places).toEqual([{ ...place, tripId: null }]);
+  });
+
   // Before story blocks, a place's story was one text and each photo carried a sort order.
   const oldPlace = { kind: "city", lat: -9.5, lng: -77.5, countryCode: "PE", parentId: null, tripId: null, visitedOn: [] };
   const oldPhoto = { caption: "", takenAt: null, lat: null, lng: null };

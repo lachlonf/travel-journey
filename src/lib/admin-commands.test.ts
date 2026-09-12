@@ -2,7 +2,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createAdminCommands, type CommandResult, type PhotoInput, type PlaceInput, type PlaceUpdate, type TripInput } from "./admin-commands";
+import {
+  createAdminCommands,
+  type CommandResult,
+  type PhotoInput,
+  type PlaceInput,
+  type PlaceUpdate,
+  type TripInput,
+  type TripUpdate,
+} from "./admin-commands";
 import { buildJourney, tripStops } from "./journey";
 import { createLocalRepository } from "./repository/local";
 import type { Place } from "./types";
@@ -186,12 +194,91 @@ describe("updatePlace", () => {
   });
 });
 
+describe("updateTrip", () => {
+  const southAmerica = (input: Partial<TripInput> = {}) =>
+    commands().createTrip({ name: "South America", story: "How it started.", startDate: "2025-06-01", endDate: "2025-07-10", ...input });
+
+  it("refines a trip's name, dates and story", async () => {
+    const trip = unwrap(await southAmerica());
+
+    const result = await commands().updateTrip({
+      id: trip.id,
+      name: "South America 2025",
+      story: "How it really started.\n\nThen the mountains.",
+      startDate: "2025-06-02",
+      endDate: "2025-07-12",
+    });
+
+    expect(result.ok).toBe(true);
+    const after = (await journey()).tripById.get(trip.id)!;
+    expect(after).toEqual({
+      id: trip.id,
+      name: "South America 2025",
+      story: "How it really started.\n\nThen the mountains.",
+      startDate: "2025-06-02",
+      endDate: "2025-07-12",
+    });
+  });
+
+  it("keeps the trip's stops when it's renamed", async () => {
+    const trip = unwrap(await southAmerica());
+    unwrap(await commands().addPlace(city({ tripId: trip.id })));
+
+    const result = await commands().updateTrip({ id: trip.id, name: "Peru 2025", story: "", startDate: null, endDate: null });
+
+    expect(result.ok).toBe(true);
+    expect(tripStops(await journey(), trip.id).map((p) => p.name)).toEqual(["Huaraz"]);
+  });
+
+  it("changes nothing when it refuses", async () => {
+    const trip = unwrap(await southAmerica());
+
+    const result = await commands().updateTrip({ id: trip.id, name: "South America 2025", story: "", startDate: "2025-07-10", endDate: "2025-06-01" });
+
+    expect(result.ok).toBe(false);
+    expect((await journey()).tripById.get(trip.id)).toEqual(trip);
+  });
+});
+
+describe("deleteTrip", () => {
+  it("dissolves the trip, keeping its places on the globe", async () => {
+    const trip = unwrap(await commands().createTrip({ name: "South America 2025", story: "", startDate: null, endDate: null }));
+    const huaraz = unwrap(await commands().addPlace(city({ tripId: trip.id })));
+
+    const result = await commands().deleteTrip(trip.id);
+
+    expect(result.ok).toBe(true);
+    const after = await journey();
+    expect(after.tripById.size).toBe(0);
+    expect(tripStops(after, trip.id)).toEqual([]);
+    expect(after.countryByCode.get("PE")!.cities.map((c) => [c.place.name, c.place.tripId])).toEqual([["Huaraz", null]]);
+    expect(after.placeById.get(huaraz.id)!.visitedOn).toEqual(["2025-06-05"]);
+  });
+
+  it("leaves every other trip and its stops alone", async () => {
+    const dissolved = unwrap(await commands().createTrip({ name: "South America 2025", story: "", startDate: null, endDate: null }));
+    const kept = unwrap(await commands().createTrip({ name: "Japan 2026", story: "", startDate: null, endDate: null }));
+    unwrap(await commands().addPlace(city({ name: "Kyoto", countryCode: "JP", tripId: kept.id })));
+
+    const result = await commands().deleteTrip(dissolved.id);
+
+    expect(result.ok).toBe(true);
+    const after = await journey();
+    expect([...after.tripById.values()]).toEqual([kept]);
+    expect(tripStops(after, kept.id).map((p) => p.name)).toEqual(["Kyoto"]);
+  });
+});
+
 describe("validation", () => {
   const photo = async (input: Partial<PhotoInput>) => {
     const place = unwrap(await commands().addPlace(city()));
     return commands().addPhoto({ placeId: place.id, caption: "", takenAt: null, lat: null, lng: null, file: jpeg, ...input });
   };
   const trip = (input: Partial<TripInput>) => commands().createTrip({ name: "Japan", story: "", startDate: null, endDate: null, ...input });
+  const editTrip = async (input: Partial<TripUpdate>) => {
+    const added = unwrap(await trip({}));
+    return commands().updateTrip({ id: added.id, name: added.name, story: added.story, startDate: null, endDate: null, ...input });
+  };
   const update = async (input: Partial<PlaceUpdate>, place: Partial<PlaceInput> = {}) => {
     const added = unwrap(await commands().addPlace(city(place)));
     return commands().updatePlace({ id: added.id, name: added.name, lat: added.lat, lng: added.lng, countryCode: "PE", tripId: null, parent: null, ...input });
@@ -201,6 +288,12 @@ describe("validation", () => {
     ["a trip without a name", () => trip({ name: "  " }), "name-required"],
     ["a trip with a malformed date", () => trip({ startDate: "June 2026" }), "invalid-date"],
     ["a trip that ends before it starts", () => trip({ startDate: "2026-06-10", endDate: "2026-06-01" }), "invalid-date"],
+    ["a trip edit sent as nothing at all", () => commands().updateTrip(null as never), "unknown-trip"],
+    ["an edit to a trip that doesn't exist", () => editTrip({ id: "nope" }), "unknown-trip"],
+    ["renaming a trip to nothing", () => editTrip({ name: "  " }), "name-required"],
+    ["a trip edit with a malformed date", () => editTrip({ startDate: "next June" }), "invalid-date"],
+    ["a trip edit that ends before it starts", () => editTrip({ startDate: "2026-06-10", endDate: "2026-06-01" }), "invalid-date"],
+    ["deleting a trip that doesn't exist", () => commands().deleteTrip("nope"), "unknown-trip"],
     ["a place sent as nothing at all", () => commands().addPlace(null as never), "invalid-kind"],
     ["a place that's neither city nor spot", () => commands().addPlace(city({ kind: "country" as never })), "invalid-kind"],
     ["a place without a name", () => commands().addPlace(city({ name: "" })), "name-required"],

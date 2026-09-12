@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createAdminCommands, type CommandResult, type PlaceInput, type PlaceUpdate } from "@/lib/admin-commands";
+import { createAdminCommands, type CommandResult, type PlaceInput, type PlaceUpdate, type TripUpdate } from "@/lib/admin-commands";
 import { requireAdmin } from "@/lib/auth";
 import { getRepository } from "@/lib/repository";
 import { createSessionToken, passwordMatches, SESSION_COOKIE, SESSION_TTL_MS, sessionSecret } from "@/lib/session";
@@ -56,6 +56,20 @@ export async function createTrip(_state: unknown, formData: FormData): Promise<C
     startDate: field(formData, "startDate") || null,
     endDate: field(formData, "endDate") || null,
   });
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function updateTrip(input: TripUpdate): Promise<CommandResult<Trip>> {
+  await requireAdmin();
+  const result = await commands().updateTrip(input);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function deleteTrip(id: string): Promise<CommandResult<Trip>> {
+  await requireAdmin();
+  const result = await commands().deleteTrip(id);
   if (result.ok) revalidateSite();
   return result;
 }
