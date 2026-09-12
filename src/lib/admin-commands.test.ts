@@ -340,6 +340,122 @@ describe("validation", () => {
   });
 });
 
+describe("setStoryBlocks", () => {
+  /** A place with two photos, so a story can be arranged around them. */
+  const withPhotos = async (story = "We set out at dawn.\n\nThe lake was worth it.") => {
+    const place = unwrap(await commands().addPlace(city({ story })));
+    const lake = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const climb = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg }));
+    return { place, lake, climb };
+  };
+  const resolved = async (placeId: string) =>
+    (await journey()).storyByPlace.get(placeId)!.map((block) => (block.type === "text" ? block.text : block.photo.caption));
+
+  it("puts a photo between two text passages", async () => {
+    const { place, lake } = await withPhotos();
+
+    const result = await commands().setStoryBlocks({
+      placeId: place.id,
+      blocks: [{ type: "text", text: "We set out at dawn." }, { type: "photo", photoId: lake.id }, { type: "text", text: "The lake was worth it." }],
+    });
+
+    expect(result.ok).toBe(true);
+    // The photo no block mentions still can't be lost: it waits at the end.
+    expect(await resolved(place.id)).toEqual(["We set out at dawn.", "the lake", "The lake was worth it.", "the climb"]);
+  });
+
+  it("drops text passages that are empty once trimmed", async () => {
+    const { place, lake } = await withPhotos("");
+
+    const result = await commands().setStoryBlocks({
+      placeId: place.id,
+      blocks: [{ type: "text", text: "  \n  " }, { type: "photo", photoId: lake.id }, { type: "text", text: "  Worth it.  " }],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await resolved(place.id)).toEqual(["the lake", "Worth it.", "the climb"]);
+  });
+
+  it("moves a photo to the end when its block is taken out, keeping the photo", async () => {
+    const { place, lake, climb } = await withPhotos();
+
+    const result = await commands().setStoryBlocks({
+      placeId: place.id,
+      blocks: [{ type: "photo", photoId: climb.id }, { type: "text", text: "Then down again." }],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(await resolved(place.id)).toEqual(["the climb", "Then down again.", "the lake"]);
+    expect((await journey()).data.photos.map((p) => p.id)).toEqual([lake.id, climb.id]);
+  });
+
+  it("changes nothing when it refuses", async () => {
+    const { place, lake } = await withPhotos();
+    const before = await resolved(place.id);
+
+    const result = await commands().setStoryBlocks({
+      placeId: place.id,
+      blocks: [{ type: "photo", photoId: lake.id }, { type: "photo", photoId: lake.id }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(await resolved(place.id)).toEqual(before);
+  });
+
+  it.each([
+    [
+      "a photo that belongs to another place",
+      async () => {
+        const { place } = await withPhotos();
+        const elsewhere = unwrap(await commands().addPlace(city({ name: "Cusco" })));
+        const theirs = unwrap(await commands().addPhoto({ placeId: elsewhere.id, caption: "", takenAt: null, lat: null, lng: null, file: jpeg }));
+        return commands().setStoryBlocks({ placeId: place.id, blocks: [{ type: "photo", photoId: theirs.id }] });
+      },
+      "photo-not-in-this-place",
+    ],
+    [
+      "a photo that isn't there at all",
+      async () => {
+        const { place } = await withPhotos();
+        return commands().setStoryBlocks({ placeId: place.id, blocks: [{ type: "photo", photoId: "nope" }] });
+      },
+      "photo-not-in-this-place",
+    ],
+    [
+      "the same photo twice",
+      async () => {
+        const { place, lake } = await withPhotos();
+        return commands().setStoryBlocks({
+          placeId: place.id,
+          blocks: [{ type: "photo", photoId: lake.id }, { type: "photo", photoId: lake.id }],
+        });
+      },
+      "duplicate-photo",
+    ],
+    ["a story for a place that doesn't exist", () => commands().setStoryBlocks({ placeId: "nope", blocks: [] }), "unknown-place"],
+    ["a story sent as nothing at all", () => commands().setStoryBlocks(null as never), "unknown-place"],
+    [
+      "blocks that aren't a list",
+      async () => {
+        const { place } = await withPhotos();
+        return commands().setStoryBlocks({ placeId: place.id, blocks: "just words" as never });
+      },
+      "invalid-story",
+    ],
+    [
+      "a block that is neither text nor photo",
+      async () => {
+        const { place } = await withPhotos();
+        return commands().setStoryBlocks({ placeId: place.id, blocks: [{ type: "map" } as never] });
+      },
+      "invalid-story",
+    ],
+  ] as const)("refuses %s", async (_, run, code) => {
+    const result = await run();
+    expect(result.ok ? null : result.error.code).toBe(code);
+  });
+});
+
 describe("addPhoto", () => {
   it("adds photos to the end of the place's story, in upload order", async () => {
     const place = unwrap(await commands().addPlace(city({ story: "We made it to the lake." })));

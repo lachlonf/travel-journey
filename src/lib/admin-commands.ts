@@ -1,7 +1,7 @@
 import { isValidLatLng } from "./geo";
 import { findCityPlace } from "./journey";
 import { isAllowedImageType, type JourneyRepository, type NewTrip, type UploadedFile } from "./repository/types";
-import type { JourneyData, Photo, Place, PlaceKind, Trip } from "./types";
+import type { JourneyData, Photo, Place, PlaceKind, StoryBlock, Trip } from "./types";
 
 /** A refusal the owner can act on. Codes are stable; messages are for people. */
 export type CommandError =
@@ -14,6 +14,9 @@ export type CommandError =
   | { code: "unknown-place"; message: string }
   | { code: "unknown-trip"; message: string }
   | { code: "city-already-exists"; message: string; cityId: string }
+  | { code: "invalid-story"; message: string }
+  | { code: "photo-not-in-this-place"; message: string }
+  | { code: "duplicate-photo"; message: string }
   | { code: "unsupported-file-type"; message: string };
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: CommandError };
@@ -63,6 +66,12 @@ export interface PhotoInput {
   lng: number | null;
   /** Null when no file came with the request. */
   file: UploadedFile | null;
+}
+
+export interface StoryBlocksInput {
+  placeId: string;
+  /** The whole story in reading order. A photo no block mentions isn't deleted: it waits at the end. */
+  blocks: StoryBlock[];
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -234,6 +243,40 @@ export function createAdminCommands(repository: JourneyRepository) {
       const unchanged = current?.name.toLowerCase() === parent.name.toLowerCase();
       const parentId = current && unchanged ? current.id : await parentCityId(data.places, parent, details.countryCode);
       return ok(await repository.updatePlace(place.id, { ...details, parentId }));
+    },
+
+    /** Arranges a place's story. Replaces every block, so what isn't given is no longer in the story. */
+    async setStoryBlocks(input: StoryBlocksInput): Promise<CommandResult<Place>> {
+      // Server actions take any payload, so an arrangement may not even be an object.
+      const data = await repository.load();
+      const place = input && typeof input === "object" ? data.places.find((p) => p.id === input.placeId) : undefined;
+      if (!place) return fail({ code: "unknown-place", message: "That place doesn't exist." });
+
+      const notAStory: CommandError = { code: "invalid-story", message: "A story is a list of text passages and photos." };
+      if (!Array.isArray(input.blocks)) return fail(notAStory);
+
+      const ours = new Set(data.photos.filter((p) => p.placeId === place.id).map((p) => p.id));
+      const used = new Set<string>();
+      const blocks: StoryBlock[] = [];
+
+      // Nothing is written until every block checks out, so a refused arrangement leaves the story as it was.
+      for (const block of input.blocks) {
+        if (block?.type === "text") {
+          // A passage that's only whitespace would leave a gap in the story, so it goes.
+          const passage = text(block.text);
+          if (passage) blocks.push({ type: "text", text: passage });
+          continue;
+        }
+        if (block?.type !== "photo") return fail(notAStory);
+
+        const photoId = text(block.photoId);
+        if (!ours.has(photoId)) return fail({ code: "photo-not-in-this-place", message: "That photo isn't one of this place's photos." });
+        if (used.has(photoId)) return fail({ code: "duplicate-photo", message: "That photo is already in this story." });
+        used.add(photoId);
+        blocks.push({ type: "photo", photoId });
+      }
+
+      return ok(await repository.updatePlace(place.id, { storyBlocks: blocks }));
     },
 
     async addPhoto(input: PhotoInput): Promise<CommandResult<Photo>> {

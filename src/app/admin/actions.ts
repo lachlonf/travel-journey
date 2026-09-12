@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createAdminCommands, type CommandResult, type PlaceInput, type PlaceUpdate, type TripUpdate } from "@/lib/admin-commands";
+import {
+  createAdminCommands,
+  type CommandResult,
+  type PlaceInput,
+  type PlaceUpdate,
+  type StoryBlocksInput,
+  type TripUpdate,
+} from "@/lib/admin-commands";
 import { requireAdmin } from "@/lib/auth";
 import { getRepository } from "@/lib/repository";
 import { createSessionToken, passwordMatches, SESSION_COOKIE, SESSION_TTL_MS, sessionSecret } from "@/lib/session";
@@ -84,6 +91,13 @@ export async function createPlace(input: PlaceInput): Promise<CommandResult<Plac
 export async function updatePlace(input: PlaceUpdate): Promise<CommandResult<Place>> {
   await requireAdmin();
   const result = await commands().updatePlace(input);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function setStoryBlocks(input: StoryBlocksInput): Promise<CommandResult<Place>> {
+  await requireAdmin();
+  const result = await commands().setStoryBlocks(input);
   if (result.ok) revalidateSite();
   return result;
 }
