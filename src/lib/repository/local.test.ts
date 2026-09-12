@@ -39,6 +39,19 @@ describe("local repository", () => {
     expect(place.id).not.toBe(fixture.places[0].id);
   });
 
+  it("changes only the fields an update gives it", async () => {
+    const place = await open().createPlace(fixture.places[0]);
+
+    const updated = await open().updatePlace(place.id, { name: "Huaráz", tripId: null });
+
+    expect(updated).toEqual({ ...place, name: "Huaráz", tripId: null });
+    expect((await open().load()).places).toEqual([updated]);
+  });
+
+  it("refuses to update a place that isn't there", async () => {
+    await expect(open().updatePlace("nope", { name: "Nowhere" })).rejects.toThrow("No place with id nope");
+  });
+
   // Before story blocks, a place's story was one text and each photo carried a sort order.
   const oldPlace = { kind: "city", lat: -9.5, lng: -77.5, countryCode: "PE", parentId: null, tripId: null, visitedOn: [] };
   const oldPhoto = { caption: "", takenAt: null, lat: null, lng: null };

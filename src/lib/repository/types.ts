@@ -14,6 +14,8 @@ export interface JourneyRepository {
   load(): Promise<JourneyData>;
   createTrip(input: NewTrip): Promise<Trip>;
   createPlace(input: NewPlace): Promise<Place>;
+  /** Changes only the fields given. Throws if the place doesn't exist. */
+  updatePlace(id: string, changes: Partial<NewPlace>): Promise<Place>;
   addPhoto(input: NewPhoto, file: UploadedFile): Promise<Photo>;
 }
 

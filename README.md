@@ -48,7 +48,7 @@ Import the repo into Vercel and set `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABAS
   - `session.ts`, `exif.ts` and `cities.ts` cover the admin cookie, reading photo GPS and dates, and city search.
 - **`src/components/globe/`** is the Three.js engine. It renders the globe off-screen, storing each country's unlock progress in the alpha channel. A second pass then draws locked pixels as glyphs and lets unlocked pixels show through. The reveal sweeps west to east, glyph by glyph, with a shimmer at the front. Each browser plays a country's unlock once, remembered in `localStorage`.
 - **`src/lib/repository/`** holds the Supabase store and the local JSON store, both behind one interface.
-- **`src/app/`** has the pages: `/` landing, `/explore`, `/trips/[id]` (story mode) and `/admin`.
+- **`src/app/`** has the pages: `/` landing, `/explore`, `/trips/[id]` (story mode), `/admin` and `/admin/places/[id]` (editing one place).
 
 ## Scaffold status
 
@@ -60,12 +60,14 @@ Working end to end:
 - Journal-style story panel
 - Mobile bottom sheet and a lighter rendering path for phones
 - Password-gated admin: add trips, cities and spots, city search, nearest-city suggestion, EXIF location and date pre-fill, and photo upload with in-browser resizing
+- Editing a place: its name, coordinates, country code, trip, and the city a spot folds into
 
 Not built yet:
 
 - Arranging a place's story in the admin. Stories are ordered text and photo blocks, but for now the admin writes the story text as one block and new photos land at the end.
 - Uploading straight from the browser to Supabase Storage. Photos currently pass through a server action, so they're resized in the browser first to stay under Vercel's ~4.5 MB request limit; HEIC files that Chrome can't decode aren't resized.
-- Editing or deleting trips, places and photos
+- Editing trips, and deleting trips, places and photos
+- Editing a place's visit dates or its photos (its details can be edited)
 - A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)
 - Sharper imagery when zoomed into a city (the earth texture is 2048px)
 - Route lines between a trip's stops

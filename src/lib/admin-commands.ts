@@ -1,7 +1,7 @@
 import { isValidLatLng } from "./geo";
 import { findCityPlace } from "./journey";
 import { isAllowedImageType, type JourneyRepository, type UploadedFile } from "./repository/types";
-import type { Photo, Place, PlaceKind, Trip } from "./types";
+import type { JourneyData, Photo, Place, PlaceKind, Trip } from "./types";
 
 /** A refusal the owner can act on. Codes are stable; messages are for people. */
 export type CommandError =
@@ -25,16 +25,27 @@ export interface TripInput {
   endDate: string | null;
 }
 
-export interface PlaceInput {
-  kind: PlaceKind;
+/** What a place is called and where it sits: the same fields whether you're adding one or correcting one. */
+export interface PlaceDetails {
   name: string;
   lat: number;
   lng: number;
   countryCode: string;
   tripId: string | null;
+}
+
+export interface PlaceInput extends PlaceDetails {
+  kind: PlaceKind;
   visitedOn: string | null;
   story: string;
   /** For specific spots: the city it folds into. Matched to an existing city by name, otherwise created. */
+  parent: { name: string; lat: number; lng: number } | null;
+}
+
+/** A place's details as the owner corrects them. Its kind, visits and story are changed elsewhere. */
+export interface PlaceUpdate extends PlaceDetails {
+  id: string;
+  /** For specific spots: the city it folds into, found or created as when adding. Ignored for cities. */
   parent: { name: string; lat: number; lng: number } | null;
 }
 
@@ -55,11 +66,47 @@ const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value });
 const fail = <T>(error: CommandError): CommandResult<T> => ({ ok: false, error });
 const text = (value: unknown) => String(value ?? "").trim();
 
+/** What adding and editing a place both check. */
+function placeDetailsError(data: JourneyData, place: PlaceDetails): CommandError | null {
+  if (!place.name) return { code: "name-required", message: "The place needs a name." };
+  if (!isValidLatLng(place.lat, place.lng)) return { code: "invalid-coordinates", message: "Those coordinates aren't on Earth." };
+  if (!/^[A-Z]{2}$/.test(place.countryCode)) return { code: "invalid-country", message: "Country must be a two-letter code, like PE." };
+  if (place.tripId && !data.trips.some((t) => t.id === place.tripId)) return { code: "unknown-trip", message: "That trip doesn't exist." };
+  return null;
+}
+
+type ParentCity = NonNullable<PlaceInput["parent"]>;
+
+/** The parent as given, or null when it has no name or its coordinates aren't on Earth. */
+function validParent(parent: PlaceInput["parent"]): ParentCity | null {
+  const name = text(parent?.name);
+  return parent && name && isValidLatLng(parent.lat, parent.lng) ? { name, lat: parent.lat, lng: parent.lng } : null;
+}
+
 /**
  * Every write to the journal. Validates input and returns a typed error for anything the owner can fix;
  * throws only when something unexpected breaks, like the store.
  */
 export function createAdminCommands(repository: JourneyRepository) {
+  /** The city a spot folds into: matched by name within the country, otherwise created. */
+  async function parentCityId(places: readonly Place[], parent: ParentCity, countryCode: string): Promise<string> {
+    const existing = findCityPlace(places, parent.name, countryCode);
+    if (existing) return existing.id;
+    const created = await repository.createPlace({
+      kind: "city",
+      name: parent.name,
+      lat: parent.lat,
+      lng: parent.lng,
+      countryCode,
+      parentId: null,
+      // Just the grouping the spot folds into, not a stop you chose: no trip, no visit.
+      tripId: null,
+      visitedOn: [],
+      storyBlocks: [],
+    });
+    return created.id;
+  }
+
   return {
     async createTrip(input: TripInput): Promise<CommandResult<Trip>> {
       const name = text(input.name);
@@ -87,11 +134,9 @@ export function createAdminCommands(repository: JourneyRepository) {
       const tripId = input.tripId || null;
 
       if (input.kind !== "city" && input.kind !== "poi") return fail({ code: "invalid-kind", message: "Choose city or specific spot." });
-      if (!name) return fail({ code: "name-required", message: "The place needs a name." });
-      if (!isValidLatLng(input.lat, input.lng)) return fail({ code: "invalid-coordinates", message: "Those coordinates aren't on Earth." });
-      if (!/^[A-Z]{2}$/.test(countryCode)) return fail({ code: "invalid-country", message: "Country must be a two-letter code, like PE." });
+      const invalid = placeDetailsError(data, { name, lat: input.lat, lng: input.lng, countryCode, tripId });
+      if (invalid) return fail(invalid);
       if (input.visitedOn && !ISO_DATE.test(input.visitedOn)) return fail({ code: "invalid-date", message: "Visit date must be YYYY-MM-DD." });
-      if (tripId && !data.trips.some((t) => t.id === tripId)) return fail({ code: "unknown-trip", message: "That trip doesn't exist." });
 
       const existing = input.kind === "city" ? findCityPlace(data.places, name, countryCode) : undefined;
       if (existing) {
@@ -104,26 +149,9 @@ export function createAdminCommands(repository: JourneyRepository) {
 
       let parentId: string | null = null;
       if (input.kind === "poi") {
-        const parentName = text(input.parent?.name);
-        if (!input.parent || !parentName || !isValidLatLng(input.parent.lat, input.parent.lng)) {
-          return fail({ code: "parent-city-required", message: "A specific spot needs a city to fold into." });
-        }
-        parentId =
-          findCityPlace(data.places, parentName, countryCode)?.id ??
-          (
-            await repository.createPlace({
-              kind: "city",
-              name: parentName,
-              lat: input.parent.lat,
-              lng: input.parent.lng,
-              countryCode,
-              parentId: null,
-              // Just the grouping the spot folds into, not a stop you chose: no trip, no visit.
-              tripId: null,
-              visitedOn: [],
-              storyBlocks: [],
-            })
-          ).id;
+        const parent = validParent(input.parent);
+        if (!parent) return fail({ code: "parent-city-required", message: "A specific spot needs a city to fold into." });
+        parentId = await parentCityId(data.places, parent, countryCode);
       }
 
       const story = String(input.story ?? "");
@@ -140,6 +168,41 @@ export function createAdminCommands(repository: JourneyRepository) {
           storyBlocks: story.trim() ? [{ type: "text", text: story }] : [],
         }),
       );
+    },
+
+    async updatePlace(input: PlaceUpdate): Promise<CommandResult<Place>> {
+      const data = await repository.load();
+      const place = input && typeof input === "object" ? data.places.find((p) => p.id === input.id) : undefined;
+      if (!place) return fail({ code: "unknown-place", message: "That place doesn't exist." });
+
+      const details: PlaceDetails = {
+        name: text(input.name),
+        lat: input.lat,
+        lng: input.lng,
+        countryCode: text(input.countryCode).toUpperCase(),
+        tripId: input.tripId || null,
+      };
+      const invalid = placeDetailsError(data, details);
+      if (invalid) return fail(invalid);
+
+      if (place.kind === "city") {
+        const existing = findCityPlace(data.places, details.name, details.countryCode);
+        if (existing && existing.id !== place.id) {
+          return fail({ code: "city-already-exists", message: `${details.name} is already on the map.`, cityId: existing.id });
+        }
+        return ok(await repository.updatePlace(place.id, details));
+      }
+
+      // Every check comes before this: resolving the parent may create a city.
+      const parent = validParent(input.parent);
+      if (!parent) return fail({ code: "parent-city-required", message: "A specific spot needs a city to fold into." });
+
+      // Keeping the same city keeps the very same city, so correcting a spot's country doesn't
+      // tear it out of the city it folds into and leave a copy behind in the new country.
+      const current = data.places.find((p) => p.id === place.parentId);
+      const unchanged = current?.name.toLowerCase() === parent.name.toLowerCase();
+      const parentId = current && unchanged ? current.id : await parentCityId(data.places, parent, details.countryCode);
+      return ok(await repository.updatePlace(place.id, { ...details, parentId }));
     },
 
     async addPhoto(input: PhotoInput): Promise<CommandResult<Photo>> {

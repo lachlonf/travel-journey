@@ -64,29 +64,35 @@ export default async function AdminPage() {
         {journey.countries.length === 0 ? (
           <p className="muted">Nothing yet.</p>
         ) : (
-          <ul className="tree">
-            {journey.countries.map((country) => (
-              <li key={country.code}>
-                <strong>{country.name}</strong>
-                <ul>
-                  {country.cities.map((city) => (
-                    <li key={city.place.id}>
-                      {city.place.name} <span className="muted">· {photoCount(city.place.id)}</span>
-                      {city.pois.length > 0 && (
-                        <ul>
-                          {city.pois.map((poi) => (
-                            <li key={poi.id}>
-                              {poi.name} <span className="muted">· {photoCount(poi.id)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
+          <>
+            <p id="tree-hint" className="hint">
+              Choose a place to edit it.
+            </p>
+            <ul className="tree" aria-describedby="tree-hint">
+              {journey.countries.map((country) => (
+                <li key={country.code}>
+                  <strong>{country.name}</strong>
+                  <ul>
+                    {country.cities.map((city) => (
+                      <li key={city.place.id}>
+                        <Link href={`/admin/places/${city.place.id}`}>{city.place.name}</Link>{" "}
+                        <span className="muted">· {photoCount(city.place.id)}</span>
+                        {city.pois.length > 0 && (
+                          <ul>
+                            {city.pois.map((poi) => (
+                              <li key={poi.id}>
+                                <Link href={`/admin/places/${poi.id}`}>{poi.name}</Link> <span className="muted">· {photoCount(poi.id)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
     </main>

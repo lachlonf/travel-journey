@@ -917,3 +917,15 @@ textarea.input {
 .tree li {
   padding: 0.15rem 0;
 }
+
+.tree a {
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+
+.tree a:hover,
+.tree a:focus-visible {
+  color: var(--shimmer);
+  text-decoration-color: currentColor;
+}

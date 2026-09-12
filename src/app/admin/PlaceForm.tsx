@@ -1,26 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import type { CityResult } from "@/app/api/cities/route";
 import type { PlaceInput } from "@/lib/admin-commands";
-import { isValidLatLng } from "@/lib/geo";
 import type { Trip } from "@/lib/types";
 import { createPlace } from "./actions";
 import { CitySearch } from "./CitySearch";
+import { CoordinateFields } from "./CoordinateFields";
 import { FormStatus } from "./FormStatus";
+import { ParentCityField, noParent, parentInput, type Parent } from "./ParentCityField";
 import { PhotoPicker, releasePreviews, uploadPhotos, type PendingPhoto } from "./photos";
+import { useNearestCity } from "./useNearestCity";
 
 type Kind = PlaceInput["kind"];
-
-/** Coordinates are null for a custom name, which then sits at the spot itself. */
-interface Parent {
-  name: string;
-  lat: number | null;
-  lng: number | null;
-}
-
-const noParent: Parent = { name: "", lat: null, lng: null };
 
 export function PlaceForm({ trips }: { trips: Trip[] }) {
   const router = useRouter();
@@ -30,36 +23,22 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
   const [lng, setLng] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [parent, setParent] = useState<Parent>(noParent);
-  const [nearest, setNearest] = useState<CityResult | null>(null);
   const [tripId, setTripId] = useState("");
   const [visitedOn, setVisitedOn] = useState("");
   const [story, setStory] = useState("");
   const [photos, setPhotos] = useState<PendingPhoto[]>([]);
   const [status, setStatus] = useState<{ error?: string; message?: string }>({});
   const [busy, setBusy] = useState(false);
-  const lookup = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  /** Look up the nearest city. It only fills blanks, so nothing you've typed is overwritten. */
-  function suggestNearest(latText: string, lngText: string) {
-    clearTimeout(lookup.current);
-    const [latitude, longitude] = [Number(latText), Number(lngText)];
-    if (!latText.trim() || !lngText.trim() || !isValidLatLng(latitude, longitude)) return;
-
-    lookup.current = setTimeout(async () => {
-      const response = await fetch(`/api/cities?lat=${latitude}&lng=${longitude}`);
-      if (!response.ok) return;
-      const { nearest: city } = (await response.json()) as { nearest: CityResult | null };
-      if (!city) return;
-      setNearest(city);
-      setCountryCode((code) => code || city.countryCode);
-      setParent((current) => (current.name ? current : { name: city.name, lat: city.lat, lng: city.lng }));
-    }, 350);
-  }
+  // The nearest city only fills blanks, so nothing you've typed is overwritten.
+  const nearestCity = useNearestCity((city) => {
+    setCountryCode((code) => code || city.countryCode);
+    setParent((current) => (current.name ? current : { name: city.name, lat: city.lat, lng: city.lng }));
+  });
 
   function setCoords(nextLat: string, nextLng: string) {
     setLat(nextLat);
     setLng(nextLng);
-    suggestNearest(nextLat, nextLng);
+    nearestCity.suggest(nextLat, nextLng);
   }
 
   function onPhotosAdded(added: PendingPhoto[]) {
@@ -82,7 +61,7 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
     setLng("");
     setCountryCode("");
     setParent(noParent);
-    setNearest(null);
+    nearestCity.clear();
     setVisitedOn("");
     setStory("");
     setPhotos([]);
@@ -101,7 +80,7 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
       tripId: tripId || null,
       visitedOn: visitedOn || null,
       story,
-      parent: kind === "poi" ? { name: parent.name, lat: parent.lat ?? spot.lat, lng: parent.lng ?? spot.lng } : null,
+      parent: kind === "poi" ? parentInput(parent, spot) : null,
     };
 
     try {
@@ -157,50 +136,15 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
         </div>
       )}
 
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor="place-lat">Latitude</label>
-          <input id="place-lat" className="input" inputMode="decimal" value={lat} onChange={(e) => setCoords(e.target.value, lng)} required placeholder="-9.2112" />
-        </div>
-        <div className="field">
-          <label htmlFor="place-lng">Longitude</label>
-          <input id="place-lng" className="input" inputMode="decimal" value={lng} onChange={(e) => setCoords(lat, e.target.value)} required placeholder="-77.5466" />
-        </div>
-        <div className="field">
-          <label htmlFor="place-country">Country code</label>
-          <input
-            id="place-country"
-            className="input"
-            value={countryCode}
-            onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
-            required
-            maxLength={2}
-            pattern="[A-Za-z]{2}"
-            placeholder="PE"
-          />
-        </div>
-      </div>
+      <CoordinateFields idPrefix="place" lat={lat} lng={lng} countryCode={countryCode} onCoords={setCoords} onCountryCode={setCountryCode} />
 
       {kind === "poi" && (
-        <CitySearch
+        <ParentCityField
           id="place-parent"
-          label="Folds into city"
-          value={parent.name}
-          onChange={(text) => setParent({ name: text, lat: null, lng: null })}
-          onPick={(city) => setParent({ name: city.name, lat: city.lat, lng: city.lng })}
-          required
-          hint={
-            nearest && parent.name !== nearest.name ? (
-              <>
-                Nearest in the database:{" "}
-                <button type="button" onClick={() => setParent({ name: nearest.name, lat: nearest.lat, lng: nearest.lng })}>
-                  {nearest.name}
-                </button>
-              </>
-            ) : (
-              "Filled with the nearest city. Change it if you think of this spot as part of somewhere else."
-            )
-          }
+          parent={parent}
+          nearest={nearestCity.nearest}
+          onChange={setParent}
+          hint="Filled with the nearest city. Change it if you think of this spot as part of somewhere else."
         />
       )}
 

@@ -77,6 +77,14 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
         data.places.push(place);
         return place;
       }),
+    updatePlace: (id, changes) =>
+      update((data) => {
+        const index = data.places.findIndex((p) => p.id === id);
+        if (index === -1) throw new Error(`No place with id ${id}.`);
+        const place = { ...data.places[index], ...changes, id };
+        data.places[index] = place;
+        return place;
+      }),
     async addPhoto(input, file) {
       const id = randomUUID();
       const fileName = `${id}.${extensionFor(file.contentType)}`;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { Photo, Place, StoryBlock, Trip } from "../types";
-import { extensionFor, type JourneyRepository } from "./types";
+import { extensionFor, type JourneyRepository, type NewPlace } from "./types";
 
 export const PHOTO_BUCKET = "photos";
 
@@ -58,6 +58,28 @@ const placeFromRow = (r: PlaceRow): Place => ({
   storyBlocks: r.story_blocks,
 });
 
+const placeColumns = {
+  kind: "kind",
+  name: "name",
+  lat: "lat",
+  lng: "lng",
+  countryCode: "country_code",
+  parentId: "parent_id",
+  tripId: "trip_id",
+  visitedOn: "visited_on",
+  storyBlocks: "story_blocks",
+} as const satisfies Record<keyof NewPlace, keyof PlaceRow>;
+
+/** Only the fields given, so an update leaves the rest alone and an id smuggled in with the input is ignored. */
+function placeToRow(place: Partial<NewPlace>): Partial<PlaceRow> {
+  const row: Record<string, unknown> = {};
+  for (const [field, column] of Object.entries(placeColumns)) {
+    const value = place[field as keyof NewPlace];
+    if (value !== undefined) row[column] = value;
+  }
+  return row;
+}
+
 function unwrap<T>({ data, error }: { data: unknown; error: { message: string } | null }): T {
   if (error) throw new Error(error.message);
   return data as T;
@@ -97,18 +119,11 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
     },
 
     async createPlace(input) {
-      const row = {
-        kind: input.kind,
-        name: input.name,
-        lat: input.lat,
-        lng: input.lng,
-        country_code: input.countryCode,
-        parent_id: input.parentId,
-        trip_id: input.tripId,
-        visited_on: input.visitedOn,
-        story_blocks: input.storyBlocks,
-      };
-      return placeFromRow(unwrap<PlaceRow>(await client.from("places").insert(row).select().single()));
+      return placeFromRow(unwrap<PlaceRow>(await client.from("places").insert(placeToRow(input)).select().single()));
+    },
+
+    async updatePlace(id, changes) {
+      return placeFromRow(unwrap<PlaceRow>(await client.from("places").update(placeToRow(changes)).eq("id", id).select().single()));
     },
 
     async addPhoto(input, file) {
