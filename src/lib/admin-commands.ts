@@ -68,6 +68,16 @@ export interface PhotoInput {
   file: UploadedFile | null;
 }
 
+/** Which photo the owner means: always one of a place's own photos, never a photo id on its own. */
+export interface PhotoRef {
+  placeId: string;
+  photoId: string;
+}
+
+export interface PhotoCaptionInput extends PhotoRef {
+  caption: string;
+}
+
 export interface StoryBlocksInput {
   placeId: string;
   /** The whole story in reading order. A photo no block mentions isn't deleted: it waits at the end. */
@@ -136,6 +146,22 @@ export function createAdminCommands(repository: JourneyRepository) {
       storyBlocks: [],
     });
     return created.id;
+  }
+
+  /**
+   * The photo the owner means, with the place it belongs to. A photo is only ever reached
+   * through its place, so a photo id from elsewhere can't be edited or deleted.
+   */
+  async function ownPhoto(input: PhotoRef): Promise<CommandResult<{ place: Place; photo: Photo }>> {
+    // Server actions take any payload, so this may not even be an object.
+    const data = await repository.load();
+    const place = input && typeof input === "object" ? data.places.find((p) => p.id === input.placeId) : undefined;
+    if (!place) return fail({ code: "unknown-place", message: "That place doesn't exist." });
+
+    const photoId = text(input.photoId);
+    const photo = data.photos.find((p) => p.id === photoId && p.placeId === place.id);
+    if (!photo) return fail({ code: "photo-not-in-this-place", message: "That photo isn't one of this place's photos." });
+    return ok({ place, photo });
   }
 
   return {
@@ -305,6 +331,26 @@ export function createAdminCommands(repository: JourneyRepository) {
           file,
         ),
       );
+    },
+
+    /** Says something new about a photo. Where it sits in the story doesn't change. */
+    async updatePhotoCaption(input: PhotoCaptionInput): Promise<CommandResult<Photo>> {
+      const found = await ownPhoto(input);
+      if (!found.ok) return found;
+      return ok(await repository.updatePhoto(found.value.photo.id, { caption: text(input.caption) }));
+    },
+
+    /** Removes the photo for good: its place in the story, its record, and its stored file. */
+    async deletePhoto(input: PhotoRef): Promise<CommandResult<Photo>> {
+      const found = await ownPhoto(input);
+      if (!found.ok) return found;
+      const { place, photo } = found.value;
+
+      // The block goes first, so the story never points at a photo whose file has already gone.
+      const blocks = place.storyBlocks.filter((b) => b.type !== "photo" || b.photoId !== photo.id);
+      if (blocks.length !== place.storyBlocks.length) await repository.updatePlace(place.id, { storyBlocks: blocks });
+      await repository.deletePhoto(photo.id);
+      return ok(photo);
     },
   };
 }

@@ -21,6 +21,10 @@ export interface JourneyRepository {
   /** Changes only the fields given. Throws if the place doesn't exist. */
   updatePlace(id: string, changes: Partial<NewPlace>): Promise<Place>;
   addPhoto(input: NewPhoto, file: UploadedFile): Promise<Photo>;
+  /** Changes only the fields given. Throws if the photo doesn't exist. */
+  updatePhoto(id: string, changes: Partial<NewPhoto>): Promise<Photo>;
+  /** Removes the photo and its stored file, so it stops being reachable by URL. */
+  deletePhoto(id: string): Promise<void>;
 }
 
 // An allowlist, not image/*: SVGs can carry scripts and uploads are served publicly.

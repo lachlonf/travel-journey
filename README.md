@@ -35,6 +35,16 @@ The admin is at http://localhost:3000/admin. A `.env.local` was created with `AD
    The service role key bypasses row-level security. It's only ever used on the server. Never give it a `NEXT_PUBLIC_` prefix.
 4. Restart `npm run dev`. The database starts empty, so the sample trip disappears.
 
+### Check Supabase by hand
+
+The Supabase store isn't unit tested, because its tests would only prove the mocks. Run through this against a real project whenever that store changes:
+
+- [ ] Adding a trip, a city, a spot and a photo all save, and the photo shows on the place's page.
+- [ ] Editing a photo's caption shows the new caption on the place's page.
+- [ ] Deleting a photo removes its row _and_ the object from the `photos` bucket: its old public URL stops working.
+- [ ] Editing a place's details and arranging its story both survive a reload.
+- [ ] Deleting a trip leaves its places on the globe, now on no trip.
+
 ## Deploy
 
 Import the repo into Vercel and set `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Search engines are told not to index the site, so share the link directly.
@@ -62,13 +72,14 @@ Working end to end:
 - Password-gated admin: add trips, cities and spots, city search, nearest-city suggestion, EXIF location and date pre-fill, and photo upload with in-browser resizing
 - Editing a place: its name, coordinates, country code, trip, and the city a spot folds into
 - Editing a trip: its name, dates and story, and dissolving a trip without losing its places
+- Editing a place's photos: rewriting a caption, and deleting a photo with its stored file
 
 Not built yet:
 
 - Arranging a place's story in the admin. Stories are ordered text and photo blocks, but for now the admin writes the story text as one block and new photos land at the end.
 - Uploading straight from the browser to Supabase Storage. Photos currently pass through a server action, so they're resized in the browser first to stay under Vercel's ~4.5 MB request limit; HEIC files that Chrome can't decode aren't resized.
-- Deleting places and photos
-- Editing a place's visit dates or its photos (its details can be edited)
+- Deleting places
+- Editing a place's visit dates
 - A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)
 - Sharper imagery when zoomed into a city (the earth texture is 2048px)
 - Route lines between a trip's stops

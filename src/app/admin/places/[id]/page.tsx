@@ -5,6 +5,7 @@ import { loadJourneyData } from "@/lib/data";
 import { buildJourney, countryName } from "@/lib/journey";
 import type { StoryBlock } from "@/lib/types";
 import { EditPlaceForm } from "./EditPlaceForm";
+import { PhotoEditor } from "./PhotoEditor";
 import { StoryArranger } from "./StoryArranger";
 
 export default async function EditPlacePage({ params }: { params: Promise<{ id: string }> }) {
@@ -48,6 +49,12 @@ export default async function EditPlacePage({ params }: { params: Promise<{ id: 
       <section className="admin-section">
         <h2>Story</h2>
         <StoryArranger placeId={place.id} blocks={blocks} photos={data.photos.filter((p) => p.placeId === place.id)} />
+      </section>
+
+      <section className="admin-section">
+        <h2>Photos</h2>
+        {/* In the order the story shows them, so the two sections read the same way. */}
+        <PhotoEditor placeId={place.id} photos={journey.photosByPlace.get(place.id) ?? []} />
       </section>
     </main>
   );

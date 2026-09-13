@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import type { JourneyData, Photo, Place, StoryBlock, Trip } from "../types";
 import { extensionFor, type JourneyRepository } from "./types";
 
@@ -108,6 +108,24 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
         const photo = { ...input, id, url: `${options.publicUrlPrefix}/${fileName}` };
         data.photos.push(photo);
         return photo;
+      });
+    },
+    updatePhoto: (id, changes) =>
+      update((data) => {
+        const index = data.photos.findIndex((p) => p.id === id);
+        if (index === -1) throw new Error(`No photo with id ${id}.`);
+        const photo = { ...data.photos[index], ...changes, id };
+        data.photos[index] = photo;
+        return photo;
+      }),
+    async deletePhoto(id) {
+      const photo = (await load()).photos.find((p) => p.id === id);
+      if (!photo) throw new Error(`No photo with id ${id}.`);
+      // The file is named in the url the store gave it. Force, because a file already gone
+      // shouldn't keep the record alive: either way nothing is left to reach.
+      await rm(join(/* turbopackIgnore: true */ options.uploadsDir, basename(photo.url)), { force: true });
+      await update((data) => {
+        data.photos = data.photos.filter((p) => p.id !== id);
       });
     },
   };

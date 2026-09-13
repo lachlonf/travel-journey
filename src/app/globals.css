@@ -885,6 +885,11 @@ textarea.input {
   border-top: 1px solid var(--line);
 }
 
+/* The photo tile has no padding of its own, so its buttons bring their own. */
+.photo-item .block-actions {
+  padding: 0.5rem;
+}
+
 .photo-item-meta {
   display: flex;
   justify-content: space-between;

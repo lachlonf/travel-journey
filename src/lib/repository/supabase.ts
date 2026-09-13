@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { Photo, Place, StoryBlock, Trip } from "../types";
-import { extensionFor, type JourneyRepository, type NewPlace, type NewTrip } from "./types";
+import { extensionFor, type JourneyRepository, type NewPhoto, type NewPlace, type NewTrip } from "./types";
 
 export const PHOTO_BUCKET = "photos";
 
@@ -76,6 +76,14 @@ const placeColumns = {
   visitedOn: "visited_on",
   storyBlocks: "story_blocks",
 } as const satisfies Record<keyof NewPlace, keyof PlaceRow>;
+
+const photoColumns = {
+  placeId: "place_id",
+  caption: "caption",
+  takenAt: "taken_at",
+  lat: "lat",
+  lng: "lng",
+} as const satisfies Record<keyof NewPhoto, keyof PhotoRow>;
 
 /** Only the fields given, so an update leaves the rest alone and an id smuggled in with the input is ignored. */
 function toRow<T, R>(columns: Record<keyof T, keyof R>, value: Partial<T>): Partial<R> {
@@ -158,6 +166,20 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
         lng: input.lng,
       };
       return photoFromRow(unwrap<PhotoRow>(await client.from("photos").insert(row).select().single()));
+    },
+
+    async updatePhoto(id, changes) {
+      const row = toRow<NewPhoto, PhotoRow>(photoColumns, changes);
+      return photoFromRow(unwrap<PhotoRow>(await client.from("photos").update(row).eq("id", id).select().single()));
+    },
+
+    async deletePhoto(id) {
+      const { storage_path } = unwrap<PhotoRow>(await client.from("photos").select("*").eq("id", id).single());
+      // The file goes first: a row whose file is missing is skipped by the read model,
+      // while a file whose row is gone would stay reachable by URL with nothing pointing at it.
+      const removed = await client.storage.from(PHOTO_BUCKET).remove([storage_path]);
+      if (removed.error) throw new Error(removed.error.message);
+      unwrap(await client.from("photos").delete().eq("id", id));
     },
   };
 }

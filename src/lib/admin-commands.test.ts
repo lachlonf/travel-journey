@@ -1,6 +1,7 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createAdminCommands,
@@ -453,6 +454,140 @@ describe("setStoryBlocks", () => {
   ] as const)("refuses %s", async (_, run, code) => {
     const result = await run();
     expect(result.ok ? null : result.error.code).toBe(code);
+  });
+});
+
+describe("updatePhotoCaption", () => {
+  it("shows the new caption in the story", async () => {
+    const place = unwrap(await commands().addPlace(city({ story: "We made it to the lake." })));
+    const photo = unwrap(await commands().addPhoto({ placeId: place.id, caption: "a lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+
+    const result = await commands().updatePhotoCaption({ placeId: place.id, photoId: photo.id, caption: "  Laguna 513, at last  " });
+
+    expect(result.ok).toBe(true);
+    const story = (await journey()).storyByPlace.get(place.id)!;
+    expect(story.map((block) => (block.type === "text" ? block.text : block.photo.caption))).toEqual(["We made it to the lake.", "Laguna 513, at last"]);
+  });
+
+  it("leaves the photo where it sits in the story", async () => {
+    const place = unwrap(await commands().addPlace(city({ story: "" })));
+    const first = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const second = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+
+    unwrap(await commands().updatePhotoCaption({ placeId: place.id, photoId: first.id, caption: "the long climb" }));
+
+    const story = (await journey()).storyByPlace.get(place.id)!;
+    expect(story.map((block) => (block.type === "photo" ? [block.photo.id, block.photo.caption] : block.text))).toEqual([
+      [first.id, "the long climb"],
+      [second.id, "the lake"],
+    ]);
+  });
+});
+
+describe("deletePhoto", () => {
+  /** A story of text, photo, text, so deleting the photo has to close the gap it leaves. */
+  const withPhotoInTheMiddle = async () => {
+    const place = unwrap(await commands().addPlace(city({ story: "We set out at dawn." })));
+    const photo = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    unwrap(
+      await commands().setStoryBlocks({
+        placeId: place.id,
+        blocks: [{ type: "text", text: "We set out at dawn." }, { type: "photo", photoId: photo.id }, { type: "text", text: "Then down again." }],
+      }),
+    );
+    return { place, photo };
+  };
+  const resolved = async (placeId: string) =>
+    (await journey()).storyByPlace.get(placeId)!.map((block) => (block.type === "text" ? block.text : block.photo.caption));
+
+  it("takes the photo out of the story, leaving the passages around it", async () => {
+    const { place, photo } = await withPhotoInTheMiddle();
+
+    const result = await commands().deletePhoto({ placeId: place.id, photoId: photo.id });
+
+    expect(result.ok).toBe(true);
+    expect(await resolved(place.id)).toEqual(["We set out at dawn.", "Then down again."]);
+    expect((await journey()).data.photos).toEqual([]);
+  });
+
+  it("deletes the stored file, so the photo isn't reachable by URL any more", async () => {
+    const { place, photo } = await withPhotoInTheMiddle();
+    const file = join(dir, "uploads", basename(photo.url));
+    expect(existsSync(file)).toBe(true);
+
+    unwrap(await commands().deletePhoto({ placeId: place.id, photoId: photo.id }));
+
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it("leaves the place's other photos in the story", async () => {
+    const place = unwrap(await commands().addPlace(city({ story: "" })));
+    const lake = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const climb = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg }));
+
+    unwrap(await commands().deletePhoto({ placeId: place.id, photoId: lake.id }));
+
+    expect(await resolved(place.id)).toEqual(["the climb"]);
+    expect((await journey()).data.photos.map((p) => p.id)).toEqual([climb.id]);
+  });
+
+  it.each([
+    [
+      "editing a caption on a photo that belongs to another place",
+      async () => {
+        const { photo } = await withPhotoInTheMiddle();
+        const elsewhere = unwrap(await commands().addPlace(city({ name: "Cusco" })));
+        return commands().updatePhotoCaption({ placeId: elsewhere.id, photoId: photo.id, caption: "not mine" });
+      },
+      "photo-not-in-this-place",
+    ],
+    [
+      "editing a caption on a photo that isn't there at all",
+      async () => {
+        const { place } = await withPhotoInTheMiddle();
+        return commands().updatePhotoCaption({ placeId: place.id, photoId: "nope", caption: "nothing" });
+      },
+      "photo-not-in-this-place",
+    ],
+    [
+      "a caption for a place that doesn't exist",
+      () => commands().updatePhotoCaption({ placeId: "nope", photoId: "nope", caption: "" }),
+      "unknown-place",
+    ],
+    ["a caption sent as nothing at all", () => commands().updatePhotoCaption(null as never), "unknown-place"],
+    [
+      "deleting a photo that belongs to another place",
+      async () => {
+        const { photo } = await withPhotoInTheMiddle();
+        const elsewhere = unwrap(await commands().addPlace(city({ name: "Cusco" })));
+        return commands().deletePhoto({ placeId: elsewhere.id, photoId: photo.id });
+      },
+      "photo-not-in-this-place",
+    ],
+    [
+      "deleting a photo that isn't there at all",
+      async () => {
+        const { place } = await withPhotoInTheMiddle();
+        return commands().deletePhoto({ placeId: place.id, photoId: "nope" });
+      },
+      "photo-not-in-this-place",
+    ],
+    ["deleting a photo from a place that doesn't exist", () => commands().deletePhoto({ placeId: "nope", photoId: "nope" }), "unknown-place"],
+    ["a deletion sent as nothing at all", () => commands().deletePhoto(null as never), "unknown-place"],
+  ] as const)("refuses %s", async (_, run, code) => {
+    const result = await run();
+    expect(result.ok ? null : result.error.code).toBe(code);
+  });
+
+  it("changes nothing when it refuses", async () => {
+    const { place, photo } = await withPhotoInTheMiddle();
+    const before = await resolved(place.id);
+
+    const result = await commands().deletePhoto({ placeId: place.id, photoId: "nope" });
+
+    expect(result.ok).toBe(false);
+    expect(await resolved(place.id)).toEqual(before);
+    expect(existsSync(join(dir, "uploads", basename(photo.url)))).toBe(true);
   });
 });
 

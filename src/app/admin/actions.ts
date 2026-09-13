@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import {
   createAdminCommands,
   type CommandResult,
+  type PhotoCaptionInput,
+  type PhotoRef,
   type PlaceInput,
   type PlaceUpdate,
   type StoryBlocksInput,
@@ -98,6 +100,20 @@ export async function updatePlace(input: PlaceUpdate): Promise<CommandResult<Pla
 export async function setStoryBlocks(input: StoryBlocksInput): Promise<CommandResult<Place>> {
   await requireAdmin();
   const result = await commands().setStoryBlocks(input);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function updatePhotoCaption(input: PhotoCaptionInput): Promise<CommandResult<Photo>> {
+  await requireAdmin();
+  const result = await commands().updatePhotoCaption(input);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function deletePhoto(input: PhotoRef): Promise<CommandResult<Photo>> {
+  await requireAdmin();
+  const result = await commands().deletePhoto(input);
   if (result.ok) revalidateSite();
   return result;
 }

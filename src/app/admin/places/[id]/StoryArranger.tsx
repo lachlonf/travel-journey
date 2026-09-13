@@ -108,9 +108,7 @@ export function StoryArranger({ placeId, blocks, photos }: StoryArrangerProps) {
 
   return (
     <div className="form">
-      <p className="hint">
-        Photos you take out of the story stay in the journal: they move to the end. Deleting a photo for good comes later.
-      </p>
+      <p className="hint">Photos you take out of the story stay in the journal: they move to the end. To delete one for good, use Photos below.</p>
 
       {items.length === 0 ? (
         <p className="muted">Nothing in the story yet.</p>
