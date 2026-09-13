@@ -70,3 +70,10 @@ const EXTENSIONS: Record<string, string> = {
 export const IMAGE_TYPES = Object.keys(EXTENSIONS);
 export const isAllowedImageType = (contentType: string) => contentType in EXTENSIONS;
 export const extensionFor = (contentType: string) => EXTENSIONS[contentType] ?? "img";
+
+/**
+ * What a file of this name holds, for browsers that don't recognise the format and so report no
+ * type at all: a HEIC picked outside Safari usually arrives with an empty type on Windows and Android.
+ */
+export const imageTypeForExtension = (extension: string) =>
+  IMAGE_TYPES.find((type) => EXTENSIONS[type] === extension.toLowerCase()) ?? null;

@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createAdminCommands,
   type CommandResult,
-  type PhotoInput,
   type PlaceInput,
   type PlaceUpdate,
   type TripInput,
@@ -17,7 +16,7 @@ import {
 import { buildJourney, tripStops } from "./journey";
 import { createLocalRepository, receiveLocalUpload, type LocalRepositoryOptions } from "./repository/local";
 import { UPLOAD_TARGET_TTL_MS } from "./repository/types";
-import type { Place } from "./types";
+import type { Photo, Place } from "./types";
 
 let dir: string;
 const options = (overrides: Partial<LocalRepositoryOptions> = {}): LocalRepositoryOptions => ({
@@ -50,6 +49,14 @@ const jpeg = { bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" };
 function unwrap<T>(result: CommandResult<T>): T {
   if (!result.ok) throw new Error(result.error.message);
   return result.value;
+}
+
+/** A photo on a place, put there the way the browser puts one there: prepare, send the bytes, confirm. */
+async function uploadPhoto(placeId: string, input: Partial<UploadConfirmation> = {}): Promise<CommandResult<Photo>> {
+  const target = await commands().prepareUpload({ placeId, contentType: "image/jpeg" });
+  if (!target.ok) return target;
+  await receiveLocalUpload(options(), target.value.uploadId, jpeg);
+  return commands().confirmUpload({ uploadId: target.value.uploadId, caption: "", takenAt: null, lat: null, lng: null, ...input });
 }
 
 beforeEach(async () => {
@@ -369,10 +376,6 @@ describe("deleteTrip", () => {
 });
 
 describe("validation", () => {
-  const photo = async (input: Partial<PhotoInput>) => {
-    const place = unwrap(await commands().addPlace(city()));
-    return commands().addPhoto({ placeId: place.id, caption: "", takenAt: null, lat: null, lng: null, file: jpeg, ...input });
-  };
   const trip = (input: Partial<TripInput>) => commands().createTrip({ name: "Japan", story: "", startDate: null, endDate: null, ...input });
   const editTrip = async (input: Partial<TripUpdate>) => {
     const added = unwrap(await trip({}));
@@ -420,10 +423,6 @@ describe("validation", () => {
       },
       "city-already-exists",
     ],
-    ["a photo that's an SVG", () => photo({ file: { bytes: new Uint8Array([1]), contentType: "image/svg+xml" } }), "unsupported-file-type"],
-    ["a photo without a file", () => photo({ file: null }), "unsupported-file-type"],
-    ["a photo with a malformed date", () => photo({ takenAt: "yesterday" }), "invalid-date"],
-    ["a photo for a place that doesn't exist", () => photo({ placeId: "nope" }), "unknown-place"],
   ] as const)("refuses %s", async (_, run, code) => {
     const result = await run();
     expect(result.ok ? null : result.error.code).toBe(code);
@@ -443,8 +442,8 @@ describe("setStoryBlocks", () => {
   /** A place with two photos, so a story can be arranged around them. */
   const withPhotos = async (story = "We set out at dawn.\n\nThe lake was worth it.") => {
     const place = unwrap(await commands().addPlace(city({ story })));
-    const lake = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
-    const climb = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const lake = unwrap(await uploadPhoto(place.id, { caption: "the lake", takenAt: null, lat: null, lng: null }));
+    const climb = unwrap(await uploadPhoto(place.id, { caption: "the climb", takenAt: null, lat: null, lng: null }));
     return { place, lake, climb };
   };
   const resolved = async (placeId: string) =>
@@ -507,7 +506,7 @@ describe("setStoryBlocks", () => {
       async () => {
         const { place } = await withPhotos();
         const elsewhere = unwrap(await commands().addPlace(city({ name: "Cusco" })));
-        const theirs = unwrap(await commands().addPhoto({ placeId: elsewhere.id, caption: "", takenAt: null, lat: null, lng: null, file: jpeg }));
+        const theirs = unwrap(await uploadPhoto(elsewhere.id, { caption: "", takenAt: null, lat: null, lng: null }));
         return commands().setStoryBlocks({ placeId: place.id, blocks: [{ type: "photo", photoId: theirs.id }] });
       },
       "photo-not-in-this-place",
@@ -558,7 +557,7 @@ describe("setStoryBlocks", () => {
 describe("updatePhotoCaption", () => {
   it("shows the new caption in the story", async () => {
     const place = unwrap(await commands().addPlace(city({ story: "We made it to the lake." })));
-    const photo = unwrap(await commands().addPhoto({ placeId: place.id, caption: "a lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const photo = unwrap(await uploadPhoto(place.id, { caption: "a lake", takenAt: null, lat: null, lng: null }));
 
     const result = await commands().updatePhotoCaption({ placeId: place.id, photoId: photo.id, caption: "  Laguna 513, at last  " });
 
@@ -569,8 +568,8 @@ describe("updatePhotoCaption", () => {
 
   it("leaves the photo where it sits in the story", async () => {
     const place = unwrap(await commands().addPlace(city({ story: "" })));
-    const first = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg }));
-    const second = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const first = unwrap(await uploadPhoto(place.id, { caption: "the climb", takenAt: null, lat: null, lng: null }));
+    const second = unwrap(await uploadPhoto(place.id, { caption: "the lake", takenAt: null, lat: null, lng: null }));
 
     unwrap(await commands().updatePhotoCaption({ placeId: place.id, photoId: first.id, caption: "the long climb" }));
 
@@ -584,7 +583,7 @@ describe("updatePhotoCaption", () => {
   /** A place with one photo, which is all a refusal needs. */
   const withPhoto = async () => {
     const place = unwrap(await commands().addPlace(city({ story: "We made it to the lake." })));
-    const photo = unwrap(await commands().addPhoto({ placeId: place.id, caption: "a lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const photo = unwrap(await uploadPhoto(place.id, { caption: "a lake", takenAt: null, lat: null, lng: null }));
     return { place, photo };
   };
 
@@ -618,7 +617,7 @@ describe("deletePhoto", () => {
   /** A story of text, photo, text, so deleting the photo has to close the gap it leaves. */
   const withPhotoInTheMiddle = async () => {
     const place = unwrap(await commands().addPlace(city({ story: "We set out at dawn." })));
-    const photo = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const photo = unwrap(await uploadPhoto(place.id, { caption: "the lake", takenAt: null, lat: null, lng: null }));
     unwrap(
       await commands().setStoryBlocks({
         placeId: place.id,
@@ -652,8 +651,8 @@ describe("deletePhoto", () => {
 
   it("leaves the place's other photos in the story", async () => {
     const place = unwrap(await commands().addPlace(city({ story: "" })));
-    const lake = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
-    const climb = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const lake = unwrap(await uploadPhoto(place.id, { caption: "the lake", takenAt: null, lat: null, lng: null }));
+    const climb = unwrap(await uploadPhoto(place.id, { caption: "the climb", takenAt: null, lat: null, lng: null }));
 
     unwrap(await commands().deletePhoto({ placeId: place.id, photoId: lake.id }));
 
@@ -734,7 +733,7 @@ describe("deletePlace", () => {
 
   it("deletes a spot's photos and their stored files", async () => {
     const { spot } = await cityWithSpot();
-    const photo = unwrap(await commands().addPhoto({ placeId: spot.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const photo = unwrap(await uploadPhoto(spot.id, { caption: "the lake", takenAt: null, lat: null, lng: null }));
     const file = join(dir, "uploads", basename(photo.url));
     expect(existsSync(file)).toBe(true);
 
@@ -749,7 +748,7 @@ describe("deletePlace", () => {
 
   it("deletes a city that has no spots, along with its photos and their files", async () => {
     const huaraz = unwrap(await commands().addPlace(city()));
-    const photo = unwrap(await commands().addPhoto({ placeId: huaraz.id, caption: "the plaza", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const photo = unwrap(await uploadPhoto(huaraz.id, { caption: "the plaza", takenAt: null, lat: null, lng: null }));
     const file = join(dir, "uploads", basename(photo.url));
 
     const result = await commands().deletePlace(huaraz.id);
@@ -761,8 +760,8 @@ describe("deletePlace", () => {
 
   it("leaves every other place and its photos alone", async () => {
     const { huaraz, spot } = await cityWithSpot();
-    const kept = unwrap(await commands().addPhoto({ placeId: huaraz.id, caption: "the plaza", takenAt: null, lat: null, lng: null, file: jpeg }));
-    unwrap(await commands().addPhoto({ placeId: spot.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const kept = unwrap(await uploadPhoto(huaraz.id, { caption: "the plaza", takenAt: null, lat: null, lng: null }));
+    unwrap(await uploadPhoto(spot.id, { caption: "the lake", takenAt: null, lat: null, lng: null }));
 
     const result = await commands().deletePlace(spot.id);
 
@@ -848,16 +847,14 @@ describe("uploads", () => {
     expect(await blocks(place.id)).toEqual(["We set out at dawn.", photo.id]);
   });
 
-  it("keeps photos in upload order when one arrives directly and another through the old path", async () => {
+  it("keeps photos in the order they were uploaded", async () => {
     const place = await somewhere("");
-    const climb = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg }));
-    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
-    await receiveLocalUpload(options(), target.uploadId, jpeg);
+    const climb = unwrap(await uploadPhoto(place.id, { caption: "the climb" }));
 
-    const lake = unwrap(await commands().confirmUpload(confirmation(target.uploadId)));
+    const lake = unwrap(await uploadPhoto(place.id, { caption: "the lake" }));
 
     expect(await resolved(place.id)).toEqual(["the climb", "the lake"]);
-    // The photo already there is written down too, so the newest still reads last.
+    // Each one is written down as it's confirmed, so the newest reads last.
     expect(await blocks(place.id)).toEqual([climb.id, lake.id]);
   });
 
@@ -942,19 +939,3 @@ describe("uploads", () => {
   });
 });
 
-describe("addPhoto", () => {
-  it("adds photos to the end of the place's story, in upload order", async () => {
-    const place = unwrap(await commands().addPlace(city({ story: "We made it to the lake." })));
-
-    const first = await commands().addPhoto({ placeId: place.id, caption: "the lake", takenAt: "2025-06-07", lat: -9.2, lng: -77.5, file: jpeg });
-    const second = await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg });
-
-    expect(first.ok && second.ok).toBe(true);
-    const story = (await journey()).storyByPlace.get(place.id)!;
-    expect(story.map((block) => (block.type === "text" ? block.text : [block.photo.caption, block.photo.takenAt, block.photo.lat, block.photo.lng]))).toEqual([
-      "We made it to the lake.",
-      ["the lake", "2025-06-07", -9.2, -77.5],
-      ["the climb", null, null, null],
-    ]);
-  });
-});

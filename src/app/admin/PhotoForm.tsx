@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { plural } from "@/lib/format";
 import { FormStatus } from "./FormStatus";
-import { PhotoPicker, releasePreviews, uploadPhotos, type PendingPhoto } from "./photos";
+import { countFailed, PhotoPicker, releasePreviews, uploadPhotos, type PendingPhoto } from "./photos";
 
 export function PhotoForm({ places }: { places: { id: string; label: string }[] }) {
   const router = useRouter();
@@ -15,6 +15,8 @@ export function PhotoForm({ places }: { places: { id: string; label: string }[] 
 
   if (places.length === 0) return <p className="muted">Add a place first.</p>;
 
+  const failed = countFailed(photos);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!photos.length) {
@@ -24,11 +26,18 @@ export function PhotoForm({ places }: { places: { id: string; label: string }[] 
     setBusy(true);
     setStatus({});
     try {
-      const failed = await uploadPhotos(placeId, photos, (i, total) => setStatus({ message: `Uploading photo ${i + 1} of ${total}…` }));
+      // Photos already up are skipped, so this is both the first send and the retry.
+      const sending = photos.filter((p) => p.progress.state !== "done").length;
+      const stillFailing = await uploadPhotos(placeId, photos, setPhotos);
+      router.refresh();
+
+      if (stillFailing) {
+        setStatus({ error: `${plural(stillFailing, "photo")} didn’t go up. Their captions are kept, so you can retry them.` });
+        return;
+      }
       releasePreviews(photos);
       setPhotos([]);
-      setStatus(failed.length ? { error: `Some photos failed: ${failed.join(", ")}` } : { message: `Added ${plural(photos.length, "photo")}.` });
-      router.refresh();
+      setStatus({ message: `Added ${plural(sending, "photo")}.` });
     } finally {
       setBusy(false);
     }
@@ -38,7 +47,7 @@ export function PhotoForm({ places }: { places: { id: string; label: string }[] 
     <form className="form" onSubmit={submit}>
       <div className="field">
         <label htmlFor="photo-place">Place</label>
-        <select id="photo-place" className="input" value={placeId} onChange={(e) => setPlaceId(e.target.value)} required>
+        <select id="photo-place" className="input" value={placeId} onChange={(e) => setPlaceId(e.target.value)} required disabled={busy}>
           <option value="" disabled>
             Choose a place
           </option>
@@ -49,11 +58,11 @@ export function PhotoForm({ places }: { places: { id: string; label: string }[] 
           ))}
         </select>
       </div>
-      <PhotoPicker id="photo-files" label="Photos" photos={photos} onChange={setPhotos} />
+      <PhotoPicker id="photo-files" label="Photos" photos={photos} onChange={setPhotos} busy={busy} />
       <FormStatus {...status} />
       <div>
         <button className="btn btn-primary" disabled={busy}>
-          {busy ? "Uploading…" : "Upload"}
+          {busy ? "Uploading…" : failed ? `Retry ${plural(failed, "photo")}` : "Upload"}
         </button>
       </div>
     </form>

@@ -39,7 +39,7 @@ The admin is at http://localhost:3000/admin. A `.env.local` was created with `AD
 
 The Supabase store isn't unit tested, because its tests would only prove the mocks. Run through this against a real project whenever that store changes:
 
-- [ ] Adding a trip, a city, a spot and a photo all save, and the photo shows on the place's page.
+- [ ] Adding a trip, a city and a spot all save. (Adding a photo fails until direct uploads land on Supabase; see "Not built yet".)
 - [ ] Editing a photo's caption shows the new caption on the place's page.
 - [ ] Deleting a photo removes its row _and_ the object from the `photos` bucket: its old public URL stops working.
 - [ ] Editing a place's details and arranging its story both survive a reload.
@@ -70,7 +70,8 @@ Working end to end:
 - Explore mode and story mode, with story links from explore
 - Journal-style story panel
 - Mobile bottom sheet and a lighter rendering path for phones
-- Password-gated admin: add trips, cities and spots, city search, nearest-city suggestion, EXIF location and date pre-fill, and photo upload with in-browser resizing
+- Password-gated admin: add trips, cities and spots, city search, nearest-city suggestion, and EXIF location and date pre-fill
+- Photos uploaded straight from the browser to storage: resized first when the browser can decode them, each with its own progress, and failed ones retried without retyping a caption
 - Editing a place: its name, coordinates, country code, trip, and the city a spot folds into
 - Editing a trip: its name, dates and story, and dissolving a trip without losing its places
 - Editing a place's photos: rewriting a caption, and deleting a photo with its stored file
@@ -78,7 +79,8 @@ Working end to end:
 Not built yet:
 
 - Arranging a place's story in the admin. Stories are ordered text and photo blocks, but for now the admin writes the story text as one block and new photos land at the end.
-- Uploading straight from the browser. The server side is in place — preparing an upload hands out a target scoped to one place, one file type and a few minutes, and confirming it records the photo only once the file has arrived — and the local store backs its targets with a dev-only endpoint that writes into `public/uploads/`. The browser still posts photos through a server action, and the Supabase store's targets aren't built yet, so photos are resized in the browser first to stay under Vercel's ~4.5 MB request limit; HEIC files that Chrome can't decode aren't resized.
+- Direct uploads on Supabase. The browser now uploads straight to storage, which the local store backs with a dev-only endpoint writing into `public/uploads/`. The Supabase store doesn't hand out signed upload URLs yet, so **uploading a photo fails when the app runs against Supabase** until that lands. Everything else works there.
+- Converting HEIC for browsers that can't decode it. Such a photo goes up as it came off the camera, with a warning that it may not display for visitors on non-Apple devices.
 - Deleting places
 - Editing a place's visit dates
 - A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)

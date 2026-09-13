@@ -154,18 +154,3 @@ export async function confirmUpload(input: UploadConfirmation): Promise<CommandR
   if (result.ok) revalidateSite();
   return result;
 }
-
-export async function addPhoto(formData: FormData): Promise<CommandResult<Photo>> {
-  await requireAdmin();
-  const file = formData.get("file");
-  const result = await commands().addPhoto({
-    placeId: field(formData, "placeId"),
-    caption: field(formData, "caption"),
-    takenAt: field(formData, "takenAt") || null,
-    lat: Number(field(formData, "lat") || Number.NaN),
-    lng: Number(field(formData, "lng") || Number.NaN),
-    file: file instanceof File ? { bytes: new Uint8Array(await file.arrayBuffer()), contentType: file.type } : null,
-  });
-  if (result.ok) revalidateSite();
-  return result;
-}

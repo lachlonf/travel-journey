@@ -1,12 +1,7 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  experimental: {
-    serverActions: {
-      // Photos are resized in the browser first; this leaves room for ones that can't be (HEIC outside Safari).
-      bodySizeLimit: "4mb",
-    },
-  },
-};
+// Photo bytes go straight from the browser to storage, so nothing here needs the framework's
+// server action body limit raised.
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

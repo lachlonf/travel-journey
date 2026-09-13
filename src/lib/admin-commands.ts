@@ -1,14 +1,6 @@
 import { isValidLatLng } from "./geo";
 import { findCityPlace } from "./journey";
-import {
-  isAllowedImageType,
-  type JourneyRepository,
-  type NewPhoto,
-  type NewTrip,
-  type UploadedFile,
-  type UploadRequest,
-  type UploadTarget,
-} from "./repository/types";
+import { isAllowedImageType, type JourneyRepository, type NewPhoto, type NewTrip, type UploadRequest, type UploadTarget } from "./repository/types";
 import type { JourneyData, Photo, Place, PlaceKind, StoryBlock, Trip } from "./types";
 
 /** A refusal the owner can act on. Codes are stable; messages are for people. */
@@ -73,17 +65,6 @@ export interface VisitInput {
   date: string;
 }
 
-export interface PhotoInput {
-  placeId: string;
-  caption: string;
-  takenAt: string | null;
-  /** Where it was taken, if the photo says. Coordinates that aren't on Earth are dropped. */
-  lat: number | null;
-  lng: number | null;
-  /** Null when no file came with the request. */
-  file: UploadedFile | null;
-}
-
 /** Saying the bytes have arrived, with everything the photo should be recorded as. */
 export interface UploadConfirmation {
   /** The opaque id from the upload target. The place comes from the target, not from here. */
@@ -145,8 +126,8 @@ function placeDetailsError(data: JourneyData, place: PlaceDetails): CommandError
 
 type ParentCity = NonNullable<PlaceInput["parent"]>;
 
-/** What a photo records about itself, however its bytes reached us: through an action, or straight from the browser. */
-function photoDetails(input: Pick<PhotoInput, "caption" | "takenAt" | "lat" | "lng">): CommandResult<Omit<NewPhoto, "placeId">> {
+/** What a photo records about itself, beyond the bytes that went straight to storage. */
+function photoDetails(input: Pick<UploadConfirmation, "caption" | "takenAt" | "lat" | "lng">): CommandResult<Omit<NewPhoto, "placeId">> {
   const takenAt = text(input.takenAt) || null;
   if (takenAt && !ISO_DATE.test(takenAt)) return fail({ code: "invalid-date", message: "Photo date must be YYYY-MM-DD." });
 
@@ -414,22 +395,6 @@ export function createAdminCommands(repository: JourneyRepository) {
       }
 
       return ok(await repository.updatePlace(place.id, { storyBlocks: blocks }));
-    },
-
-    async addPhoto(input: PhotoInput): Promise<CommandResult<Photo>> {
-      const { file } = input;
-      if (!file || !isAllowedImageType(file.contentType)) {
-        return fail({ code: "unsupported-file-type", message: "Only JPEG, PNG, WebP, AVIF or HEIC images." });
-      }
-
-      const details = photoDetails(input);
-      if (!details.ok) return details;
-
-      const data = await repository.load();
-      if (!data.places.some((p) => p.id === input.placeId)) return fail({ code: "unknown-place", message: "That place doesn't exist." });
-
-      // No block for it yet: the read model appends photos no block references, so it lands at the end of the story.
-      return ok(await repository.addPhoto({ placeId: input.placeId, ...details.value }, file));
     },
 
     /**

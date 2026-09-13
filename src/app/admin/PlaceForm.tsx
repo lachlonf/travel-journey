@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import type { CityResult } from "@/app/api/cities/route";
 import type { PlaceInput } from "@/lib/admin-commands";
-import { formatDate } from "@/lib/format";
+import { formatDate, plural } from "@/lib/format";
 import type { Trip } from "@/lib/types";
 import { addVisit, createPlace } from "./actions";
 import { CitySearch } from "./CitySearch";
 import { CoordinateFields } from "./CoordinateFields";
 import { FormStatus } from "./FormStatus";
 import { ParentCityField, noParent, parentInput, type Parent } from "./ParentCityField";
-import { PhotoPicker, releasePreviews, uploadPhotos, type PendingPhoto } from "./photos";
+import { countFailed, PhotoPicker, releasePreviews, uploadPhotos, type PendingPhoto } from "./photos";
 import { useNearestCity } from "./useNearestCity";
 
 type Kind = PlaceInput["kind"];
@@ -21,6 +21,12 @@ type Kind = PlaceInput["kind"];
 interface ExistingCity {
   id: string;
   name: string;
+}
+
+/** A place that's saved with photos still to go up: what a retry sends them to, so it isn't added twice. */
+interface AwaitingPhotos {
+  placeId: string;
+  done: string;
 }
 
 export function PlaceForm({ trips }: { trips: Trip[] }) {
@@ -39,6 +45,7 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
   const [busy, setBusy] = useState(false);
   /** The city this turned out to be, when it's already on the map: the way through to a return visit. */
   const [existingCity, setExistingCity] = useState<ExistingCity | null>(null);
+  const [awaiting, setAwaiting] = useState<AwaitingPhotos | null>(null);
   // The nearest city only fills blanks, so nothing you've typed is overwritten.
   const nearestCity = useNearestCity((city) => {
     setCountryCode((code) => code || city.countryCode);
@@ -74,6 +81,7 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
   function reset() {
     releasePreviews(photos);
     setExistingCity(null);
+    setAwaiting(null);
     setName("");
     setLat("");
     setLng("");
@@ -85,10 +93,21 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
     setPhotos([]);
   }
 
-  /** Sends the photos picked here to a place that's now saved, and says how that went. */
-  async function sendPhotos(placeId: string, done: string) {
-    const failed = await uploadPhotos(placeId, photos, (i, total) => setStatus({ message: `Uploading photo ${i + 1} of ${total}…` }));
-    setStatus(failed.length ? { error: `${done}, but some photos failed: ${failed.join(", ")}` } : { message: `${done}.` });
+  /**
+   * Sends the photos picked here to a place that's now saved, and says how that went. Photos already
+   * up are skipped, so this is the retry too. Returns how many are still to go.
+   */
+  async function sendPhotos(placeId: string, done: string): Promise<number> {
+    const failed = await uploadPhotos(placeId, photos, setPhotos);
+    setStatus(failed ? { error: `${done}, but ${plural(failed, "photo")} didn’t go up.` } : { message: `${done}.` });
+    return failed;
+  }
+
+  /** What both saving and retrying do afterwards: a clean slate only once every photo has landed. */
+  function settle(placeId: string, done: string, failed: number) {
+    router.refresh();
+    if (failed) setAwaiting({ placeId, done });
+    else reset();
   }
 
   /** Records the date entered as a return visit to the city already on the map, photos and all. */
@@ -102,9 +121,21 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
         return;
       }
       // The photos picked for it belong to the city that's already there just the same.
-      await sendPhotos(city.id, `Added a visit to ${city.name}`);
-      reset();
-      router.refresh();
+      const done = `Added a visit to ${city.name}`;
+      settle(city.id, done, await sendPhotos(city.id, done));
+    } catch (error) {
+      setStatus({ error: error instanceof Error ? error.message : "Something went wrong." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Sends again the photos that didn't make it, to the place that's already saved. */
+  async function retryPhotos({ placeId, done }: AwaitingPhotos) {
+    setBusy(true);
+    setStatus({});
+    try {
+      settle(placeId, done, await sendPhotos(placeId, done));
     } catch (error) {
       setStatus({ error: error instanceof Error ? error.message : "Something went wrong." });
     } finally {
@@ -137,9 +168,8 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
         setStatus({ error: result.error.message });
         return;
       }
-      await sendPhotos(result.value.id, `Saved ${name}`);
-      reset();
-      router.refresh();
+      const done = `Saved ${name}`;
+      settle(result.value.id, done, await sendPhotos(result.value.id, done));
     } catch (error) {
       setStatus({ error: error instanceof Error ? error.message : "Something went wrong." });
     } finally {
@@ -170,6 +200,7 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
         photos={photos}
         onChange={setPhotos}
         onAdded={onPhotosAdded}
+        busy={busy}
       />
 
       {kind === "city" ? (
@@ -247,11 +278,29 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
         </>
       )}
 
-      <div>
-        <button className="btn btn-primary" disabled={busy}>
-          {busy ? "Saving…" : "Save place"}
-        </button>
-      </div>
+      {awaiting ? (
+        <>
+          {/* The place is saved, so the way on is the photos, not this form again. */}
+          <p className="hint">
+            The place is saved and the fields above no longer change it. The photos marked above haven’t gone up yet, captions and all. Starting
+            another place leaves them behind.
+          </p>
+          <div className="block-actions">
+            <button className="btn btn-primary" type="button" disabled={busy} onClick={() => retryPhotos(awaiting)}>
+              {busy ? "Uploading…" : `Retry ${plural(countFailed(photos), "photo")}`}
+            </button>
+            <button className="btn" type="button" disabled={busy} onClick={reset}>
+              Start another place
+            </button>
+          </div>
+        </>
+      ) : (
+        <div>
+          <button className="btn btn-primary" disabled={busy}>
+            {busy ? "Saving…" : "Save place"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }
