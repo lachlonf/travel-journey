@@ -152,6 +152,18 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
       return placeFromRow(unwrap<PlaceRow>(await client.from("places").update(row).eq("id", id).select().single()));
     },
 
+    async deletePlace(id) {
+      const rows = unwrap<PhotoRow[]>(await client.from("photos").select("*").eq("place_id", id));
+      // Storage objects aren't reached by the row cascade, so the files go first and explicitly:
+      // a place's photos must stop being reachable by URL, not just stop being listed.
+      if (rows.length) {
+        const removed = await client.storage.from(PHOTO_BUCKET).remove(rows.map((r) => r.storage_path));
+        if (removed.error) throw new Error(removed.error.message);
+      }
+      // photos.place_id is `on delete cascade`, so the photo rows go with the place.
+      unwrap(await client.from("places").delete().eq("id", id));
+    },
+
     async addPhoto(input, file) {
       const path = `${input.placeId}/${randomUUID()}.${extensionFor(file.contentType)}`;
       const upload = await client.storage.from(PHOTO_BUCKET).upload(path, file.bytes, { contentType: file.contentType });

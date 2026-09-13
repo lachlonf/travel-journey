@@ -99,6 +99,21 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
         data.places[index] = place;
         return place;
       }),
+    async deletePlace(id) {
+      const data = await load();
+      if (!data.places.some((p) => p.id === id)) throw new Error(`No place with id ${id}.`);
+
+      // The files go first, for the same reason as deleting one photo: what's deleted
+      // has to stop being reachable by URL, and force means one already gone is no obstacle.
+      const theirs = data.photos.filter((p) => p.placeId === id);
+      for (const photo of theirs) {
+        await rm(join(/* turbopackIgnore: true */ options.uploadsDir, basename(photo.url)), { force: true });
+      }
+      await update((current) => {
+        current.places = current.places.filter((p) => p.id !== id);
+        current.photos = current.photos.filter((p) => p.placeId !== id);
+      });
+    },
     async addPhoto(input, file) {
       const id = randomUUID();
       const fileName = `${id}.${extensionFor(file.contentType)}`;

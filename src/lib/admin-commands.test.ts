@@ -600,6 +600,103 @@ describe("deletePhoto", () => {
   });
 });
 
+describe("deletePlace", () => {
+  /** Huaraz with a spot folded into it, which is what makes deleting the city a refusal. */
+  const cityWithSpot = async () => {
+    const huaraz = unwrap(await commands().addPlace(city()));
+    const spot = unwrap(
+      await commands().addPlace(city({ kind: "poi", name: "Laguna 513", lat: -9.2112, lng: -77.5466, parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 } })),
+    );
+    return { huaraz, spot };
+  };
+
+  it("refuses a city that still has spots, deleting nothing", async () => {
+    const { huaraz, spot } = await cityWithSpot();
+
+    const result = await commands().deletePlace(huaraz.id);
+
+    expect(result.ok ? null : result.error.code).toBe("city-still-has-spots");
+    const peru = (await journey()).countryByCode.get("PE")!;
+    expect(peru.cities.map((c) => [c.place.name, c.pois.map((p) => p.name)])).toEqual([["Huaraz", ["Laguna 513"]]]);
+    expect((await journey()).placeById.get(spot.id)).toBeDefined();
+  });
+
+  it("locks the country again once its spots and then its city are deleted", async () => {
+    const { huaraz, spot } = await cityWithSpot();
+
+    expect((await commands().deletePlace(spot.id)).ok).toBe(true);
+    const result = await commands().deletePlace(huaraz.id);
+
+    expect(result.ok).toBe(true);
+    // No places left in Peru, so the country isn't on the globe at all: it locks back into ASCII.
+    const after = await journey();
+    expect(after.countryByCode.get("PE")).toBeUndefined();
+    expect(after.countries).toEqual([]);
+  });
+
+  it("deletes a spot's photos and their stored files", async () => {
+    const { spot } = await cityWithSpot();
+    const photo = unwrap(await commands().addPhoto({ placeId: spot.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const file = join(dir, "uploads", basename(photo.url));
+    expect(existsSync(file)).toBe(true);
+
+    const result = await commands().deletePlace(spot.id);
+
+    expect(result.ok).toBe(true);
+    expect(existsSync(file)).toBe(false);
+    const after = await journey();
+    expect(after.data.photos).toEqual([]);
+    expect(after.cityOf.get(spot.id)).toBeUndefined();
+  });
+
+  it("deletes a city that has no spots, along with its photos and their files", async () => {
+    const huaraz = unwrap(await commands().addPlace(city()));
+    const photo = unwrap(await commands().addPhoto({ placeId: huaraz.id, caption: "the plaza", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const file = join(dir, "uploads", basename(photo.url));
+
+    const result = await commands().deletePlace(huaraz.id);
+
+    expect(result.ok).toBe(true);
+    expect(existsSync(file)).toBe(false);
+    expect((await journey()).countries).toEqual([]);
+  });
+
+  it("leaves every other place and its photos alone", async () => {
+    const { huaraz, spot } = await cityWithSpot();
+    const kept = unwrap(await commands().addPhoto({ placeId: huaraz.id, caption: "the plaza", takenAt: null, lat: null, lng: null, file: jpeg }));
+    unwrap(await commands().addPhoto({ placeId: spot.id, caption: "the lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+
+    const result = await commands().deletePlace(spot.id);
+
+    expect(result.ok).toBe(true);
+    const after = await journey();
+    expect(after.data.photos.map((p) => p.id)).toEqual([kept.id]);
+    expect(existsSync(join(dir, "uploads", basename(kept.url)))).toBe(true);
+    expect(after.countryByCode.get("PE")!.cities.map((c) => [c.place.name, c.pois.map((p) => p.name)])).toEqual([["Huaraz", []]]);
+  });
+
+  it("keeps a deleted place's trip and its other stops", async () => {
+    const trip = unwrap(await commands().createTrip({ name: "South America 2025", story: "", startDate: null, endDate: null }));
+    const huaraz = unwrap(await commands().addPlace(city({ tripId: trip.id })));
+    unwrap(await commands().addPlace(city({ name: "Cusco", tripId: trip.id })));
+
+    const result = await commands().deletePlace(huaraz.id);
+
+    expect(result.ok).toBe(true);
+    const after = await journey();
+    expect(after.tripById.get(trip.id)).toEqual(trip);
+    expect(tripStops(after, trip.id).map((p) => p.name)).toEqual(["Cusco"]);
+  });
+
+  it.each([
+    ["deleting a place that doesn't exist", () => commands().deletePlace("nope"), "unknown-place"],
+    ["a deletion sent as nothing at all", () => commands().deletePlace(null as never), "unknown-place"],
+  ] as const)("refuses %s", async (_, run, code) => {
+    const result = await run();
+    expect(result.ok ? null : result.error.code).toBe(code);
+  });
+});
+
 describe("addPhoto", () => {
   it("adds photos to the end of the place's story, in upload order", async () => {
     const place = unwrap(await commands().addPlace(city({ story: "We made it to the lake." })));

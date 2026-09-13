@@ -14,6 +14,7 @@ export type CommandError =
   | { code: "unknown-place"; message: string }
   | { code: "unknown-trip"; message: string }
   | { code: "city-already-exists"; message: string; cityId: string }
+  | { code: "city-still-has-spots"; message: string }
   | { code: "invalid-story"; message: string }
   | { code: "photo-not-in-this-place"; message: string }
   | { code: "duplicate-photo"; message: string }
@@ -269,6 +270,28 @@ export function createAdminCommands(repository: JourneyRepository) {
       const unchanged = current?.name.toLowerCase() === parent.name.toLowerCase();
       const parentId = current && unchanged ? current.id : await parentCityId(data.places, parent, details.countryCode);
       return ok(await repository.updatePlace(place.id, { ...details, parentId }));
+    },
+
+    /**
+     * Removes the place for good, with its photos and their stored files. A city that still has
+     * spots is refused: one click shouldn't wipe out several places, and the spots would be orphaned.
+     * A country whose last place goes locks back into ASCII on its own, since the globe reads the places.
+     */
+    async deletePlace(id: string): Promise<CommandResult<Place>> {
+      const data = await repository.load();
+      const place = data.places.find((p) => p.id === id);
+      if (!place) return fail({ code: "unknown-place", message: "That place doesn't exist." });
+
+      const spots = data.places.filter((p) => p.parentId === place.id);
+      if (spots.length) {
+        return fail({
+          code: "city-still-has-spots",
+          message: `${place.name} still has ${spots.length === 1 ? "a spot" : `${spots.length} spots`} folded into it. Delete ${spots.length === 1 ? "it" : "them"} first.`,
+        });
+      }
+
+      await repository.deletePlace(place.id);
+      return ok(place);
     },
 
     /** Arranges a place's story. Replaces every block, so what isn't given is no longer in the story. */

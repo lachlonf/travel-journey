@@ -20,6 +20,8 @@ export interface JourneyRepository {
   createPlace(input: NewPlace): Promise<Place>;
   /** Changes only the fields given. Throws if the place doesn't exist. */
   updatePlace(id: string, changes: Partial<NewPlace>): Promise<Place>;
+  /** Removes the place along with its photos and their stored files, leaving nothing orphaned. */
+  deletePlace(id: string): Promise<void>;
   addPhoto(input: NewPhoto, file: UploadedFile): Promise<Photo>;
   /** Changes only the fields given. Throws if the photo doesn't exist. */
   updatePhoto(id: string, changes: Partial<NewPhoto>): Promise<Photo>;

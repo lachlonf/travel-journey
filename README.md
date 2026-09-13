@@ -44,6 +44,7 @@ The Supabase store isn't unit tested, because its tests would only prove the moc
 - [ ] Deleting a photo removes its row _and_ the object from the `photos` bucket: its old public URL stops working.
 - [ ] Editing a place's details and arranging its story both survive a reload.
 - [ ] Deleting a trip leaves its places on the globe, now on no trip.
+- [ ] Deleting a spot removes its row _and_ its photos' objects from the `photos` bucket; deleting a city with spots left is refused.
 
 ## Deploy
 

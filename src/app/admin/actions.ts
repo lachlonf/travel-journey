@@ -97,6 +97,13 @@ export async function updatePlace(input: PlaceUpdate): Promise<CommandResult<Pla
   return result;
 }
 
+export async function deletePlace(id: string): Promise<CommandResult<Place>> {
+  await requireAdmin();
+  const result = await commands().deletePlace(id);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
 export async function setStoryBlocks(input: StoryBlocksInput): Promise<CommandResult<Place>> {
   await requireAdmin();
   const result = await commands().setStoryBlocks(input);
