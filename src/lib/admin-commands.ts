@@ -58,6 +58,12 @@ export interface PlaceUpdate extends PlaceDetails {
   parent: { name: string; lat: number; lng: number } | null;
 }
 
+/** One day the owner was at a place, whether it's the first time or a return. */
+export interface VisitInput {
+  placeId: string;
+  date: string;
+}
+
 export interface PhotoInput {
   placeId: string;
   caption: string;
@@ -149,6 +155,13 @@ export function createAdminCommands(repository: JourneyRepository) {
     return created.id;
   }
 
+  /** The place the owner means. Server actions take any payload, so this may not even be an object. */
+  async function ownPlace(input: VisitInput): Promise<CommandResult<Place>> {
+    const data = await repository.load();
+    const place = input && typeof input === "object" ? data.places.find((p) => p.id === input.placeId) : undefined;
+    return place ? ok(place) : fail({ code: "unknown-place", message: "That place doesn't exist." });
+  }
+
   /**
    * The photo the owner means, with the place it belongs to. A photo is only ever reached
    * through its place, so a photo id from elsewhere can't be edited or deleted.
@@ -209,7 +222,7 @@ export function createAdminCommands(repository: JourneyRepository) {
       if (existing) {
         return fail({
           code: "city-already-exists",
-          message: `${name} is already on the map. Add photos to it below instead.`,
+          message: `${name} is already on the map. Record a return visit to it instead.`,
           cityId: existing.id,
         });
       }
@@ -292,6 +305,35 @@ export function createAdminCommands(repository: JourneyRepository) {
 
       await repository.deletePlace(place.id);
       return ok(place);
+    },
+
+    /**
+     * Records a day the owner was here. Going back somewhere is another date on the place already
+     * on the globe, never a second place, so the dates stay sorted and a day already down isn't repeated.
+     */
+    async addVisit(input: VisitInput): Promise<CommandResult<Place>> {
+      const found = await ownPlace(input);
+      if (!found.ok) return found;
+
+      const date = text(input.date);
+      if (!ISO_DATE.test(date)) return fail({ code: "invalid-date", message: "Visit date must be YYYY-MM-DD." });
+
+      const visitedOn = [...new Set([...found.value.visitedOn, date])].sort();
+      return ok(await repository.updatePlace(found.value.id, { visitedOn }));
+    },
+
+    /** Takes back a date entered wrongly, leaving every other visit to this place. */
+    async removeVisit(input: VisitInput): Promise<CommandResult<Place>> {
+      const found = await ownPlace(input);
+      if (!found.ok) return found;
+
+      const date = text(input.date);
+      if (!ISO_DATE.test(date)) return fail({ code: "invalid-date", message: "Visit date must be YYYY-MM-DD." });
+
+      const visitedOn = found.value.visitedOn.filter((d) => d !== date);
+      // A date that was never recorded is nothing to take back, so nothing is written.
+      if (visitedOn.length === found.value.visitedOn.length) return ok(found.value);
+      return ok(await repository.updatePlace(found.value.id, { visitedOn }));
     },
 
     /** Arranges a place's story. Replaces every block, so what isn't given is no longer in the story. */

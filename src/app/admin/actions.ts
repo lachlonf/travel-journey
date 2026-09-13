@@ -12,6 +12,7 @@ import {
   type PlaceUpdate,
   type StoryBlocksInput,
   type TripUpdate,
+  type VisitInput,
 } from "@/lib/admin-commands";
 import { requireAdmin } from "@/lib/auth";
 import { getRepository } from "@/lib/repository";
@@ -100,6 +101,20 @@ export async function updatePlace(input: PlaceUpdate): Promise<CommandResult<Pla
 export async function deletePlace(id: string): Promise<CommandResult<Place>> {
   await requireAdmin();
   const result = await commands().deletePlace(id);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function addVisit(input: VisitInput): Promise<CommandResult<Place>> {
+  await requireAdmin();
+  const result = await commands().addVisit(input);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function removeVisit(input: VisitInput): Promise<CommandResult<Place>> {
+  await requireAdmin();
+  const result = await commands().removeVisit(input);
   if (result.ok) revalidateSite();
   return result;
 }

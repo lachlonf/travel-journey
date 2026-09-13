@@ -8,6 +8,7 @@ import { DeletePlace } from "./DeletePlace";
 import { EditPlaceForm } from "./EditPlaceForm";
 import { PhotoEditor } from "./PhotoEditor";
 import { StoryArranger } from "./StoryArranger";
+import { VisitDates } from "./VisitDates";
 
 export default async function EditPlacePage({ params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) redirect("/admin/login");
@@ -45,6 +46,11 @@ export default async function EditPlacePage({ params }: { params: Promise<{ id: 
       <section className="admin-section">
         <h2>Details</h2>
         <EditPlaceForm place={place} parentCity={parentCity} trips={data.trips} />
+      </section>
+
+      <section className="admin-section">
+        <h2>Visits</h2>
+        <VisitDates placeId={place.id} visitedOn={place.visitedOn} />
       </section>
 
       <section className="admin-section">

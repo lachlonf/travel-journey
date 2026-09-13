@@ -11,6 +11,7 @@ import {
   type PlaceUpdate,
   type TripInput,
   type TripUpdate,
+  type VisitInput,
 } from "./admin-commands";
 import { buildJourney, tripStops } from "./journey";
 import { createLocalRepository } from "./repository/local";
@@ -90,7 +91,7 @@ describe("addPlace", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { code: "city-already-exists", message: "huaraz is already on the map. Add photos to it below instead.", cityId: huaraz.id },
+      error: { code: "city-already-exists", message: "huaraz is already on the map. Record a return visit to it instead.", cityId: huaraz.id },
     });
     const peru = (await journey()).countryByCode.get("PE")!;
     expect(peru.cities.map((c) => [c.place.name, c.place.visitedOn])).toEqual([["Huaraz", ["2025-06-05"]]]);
@@ -192,6 +193,100 @@ describe("updatePlace", () => {
     expect(result.ok).toBe(false);
     const peru = (await journey()).countryByCode.get("PE")!;
     expect(peru.cities.map((c) => [c.place.name, c.pois.map((p) => [p.name, p.lat])])).toEqual([["Carhuaz", [["Laguna 513", -9.2112]]]]);
+  });
+});
+
+describe("visits", () => {
+  const peru = async () => (await journey()).countryByCode.get("PE")!;
+
+  it("records a return visit, keeping the dates in order and widening the country's date range", async () => {
+    const huaraz = unwrap(await commands().addPlace(city({ visitedOn: "2025-06-05" })));
+
+    const result = await commands().addVisit({ placeId: huaraz.id, date: "2023-01-02" });
+
+    expect(result.ok).toBe(true);
+    // The earlier visit sorts first, however late it was entered.
+    expect((await journey()).placeById.get(huaraz.id)!.visitedOn).toEqual(["2023-01-02", "2025-06-05"]);
+    expect((await peru()).dateRange).toEqual({ from: "2023-01-02", to: "2025-06-05" });
+  });
+
+  it("takes the owner from the city that already exists to a visit on it", async () => {
+    const huaraz = unwrap(await commands().addPlace(city({ visitedOn: "2025-06-05" })));
+
+    const refused = await commands().addPlace(city({ name: "huaraz", visitedOn: "2026-01-04" }));
+    if (refused.ok || refused.error.code !== "city-already-exists") throw new Error("Adding Huaraz twice should have been refused.");
+    const result = await commands().addVisit({ placeId: refused.error.cityId, date: "2026-01-04" });
+
+    expect(refused.error.cityId).toBe(huaraz.id);
+    expect(result.ok).toBe(true);
+    // One Huaraz still, with both dates: the return visit joined the city already on the map.
+    expect((await peru()).cities.map((c) => [c.place.name, c.place.visitedOn])).toEqual([["Huaraz", ["2025-06-05", "2026-01-04"]]]);
+    expect((await peru()).dateRange).toEqual({ from: "2025-06-05", to: "2026-01-04" });
+  });
+
+  it("doesn't record the same day twice", async () => {
+    const huaraz = unwrap(await commands().addPlace(city({ visitedOn: "2025-06-05" })));
+
+    const result = await commands().addVisit({ placeId: huaraz.id, date: "2025-06-05" });
+
+    expect(result.ok).toBe(true);
+    expect((await journey()).placeById.get(huaraz.id)!.visitedOn).toEqual(["2025-06-05"]);
+  });
+
+  it("removes only the visit named, narrowing the country's date range back", async () => {
+    const huaraz = unwrap(await commands().addPlace(city({ visitedOn: "2025-06-05" })));
+    unwrap(await commands().addVisit({ placeId: huaraz.id, date: "2026-01-04" }));
+
+    const result = await commands().removeVisit({ placeId: huaraz.id, date: "2026-01-04" });
+
+    expect(result.ok).toBe(true);
+    expect((await journey()).placeById.get(huaraz.id)!.visitedOn).toEqual(["2025-06-05"]);
+    expect((await peru()).dateRange).toEqual({ from: "2025-06-05", to: "2025-06-05" });
+  });
+
+  it("records the first visit to a place added without a date", async () => {
+    const huaraz = unwrap(await commands().addPlace(city({ visitedOn: null })));
+
+    const result = await commands().addVisit({ placeId: huaraz.id, date: "2025-06-05" });
+
+    expect(result.ok).toBe(true);
+    expect((await journey()).placeById.get(huaraz.id)!.visitedOn).toEqual(["2025-06-05"]);
+  });
+
+  const visitTo = async (input: Partial<VisitInput>) => {
+    const huaraz = unwrap(await commands().addPlace(city()));
+    return { placeId: huaraz.id, date: "2026-01-04", ...input };
+  };
+
+  it.each([
+    ["a visit on a malformed date", async () => commands().addVisit(await visitTo({ date: "4 January" })), "invalid-date"],
+    ["a visit with no date at all", async () => commands().addVisit(await visitTo({ date: "" })), "invalid-date"],
+    ["a visit to a place that doesn't exist", () => commands().addVisit({ placeId: "nope", date: "2026-01-04" }), "unknown-place"],
+    ["a visit sent as nothing at all", () => commands().addVisit(null as never), "unknown-place"],
+    ["removing a visit on a malformed date", async () => commands().removeVisit(await visitTo({ date: "4 January" })), "invalid-date"],
+    ["removing a visit from a place that doesn't exist", () => commands().removeVisit({ placeId: "nope", date: "2026-01-04" }), "unknown-place"],
+    ["a removal sent as nothing at all", () => commands().removeVisit(null as never), "unknown-place"],
+  ] as const)("refuses %s", async (_, run, code) => {
+    const result = await run();
+    expect(result.ok ? null : result.error.code).toBe(code);
+  });
+
+  it("changes nothing when it refuses", async () => {
+    const huaraz = unwrap(await commands().addPlace(city({ visitedOn: "2025-06-05" })));
+
+    const result = await commands().addVisit({ placeId: huaraz.id, date: "4 January" });
+
+    expect(result.ok).toBe(false);
+    expect((await journey()).placeById.get(huaraz.id)!.visitedOn).toEqual(["2025-06-05"]);
+  });
+
+  it("leaves a date that was never recorded alone", async () => {
+    const huaraz = unwrap(await commands().addPlace(city({ visitedOn: "2025-06-05" })));
+
+    const result = await commands().removeVisit({ placeId: huaraz.id, date: "2026-01-04" });
+
+    expect(result.ok).toBe(true);
+    expect((await journey()).placeById.get(huaraz.id)!.visitedOn).toEqual(["2025-06-05"]);
   });
 });
 
