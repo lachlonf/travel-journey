@@ -482,6 +482,38 @@ describe("updatePhotoCaption", () => {
       [second.id, "the lake"],
     ]);
   });
+
+  /** A place with one photo, which is all a refusal needs. */
+  const withPhoto = async () => {
+    const place = unwrap(await commands().addPlace(city({ story: "We made it to the lake." })));
+    const photo = unwrap(await commands().addPhoto({ placeId: place.id, caption: "a lake", takenAt: null, lat: null, lng: null, file: jpeg }));
+    return { place, photo };
+  };
+
+  it.each([
+    [
+      "a caption on a photo that belongs to another place",
+      async () => {
+        const { photo } = await withPhoto();
+        const elsewhere = unwrap(await commands().addPlace(city({ name: "Cusco" })));
+        return commands().updatePhotoCaption({ placeId: elsewhere.id, photoId: photo.id, caption: "not mine" });
+      },
+      "photo-not-in-this-place",
+    ],
+    [
+      "a caption on a photo that isn't there at all",
+      async () => {
+        const { place } = await withPhoto();
+        return commands().updatePhotoCaption({ placeId: place.id, photoId: "nope", caption: "nothing" });
+      },
+      "photo-not-in-this-place",
+    ],
+    ["a caption for a place that doesn't exist", () => commands().updatePhotoCaption({ placeId: "nope", photoId: "nope", caption: "" }), "unknown-place"],
+    ["a caption sent as nothing at all", () => commands().updatePhotoCaption(null as never), "unknown-place"],
+  ] as const)("refuses %s", async (_, run, code) => {
+    const result = await run();
+    expect(result.ok ? null : result.error.code).toBe(code);
+  });
 });
 
 describe("deletePhoto", () => {
@@ -532,29 +564,6 @@ describe("deletePhoto", () => {
   });
 
   it.each([
-    [
-      "editing a caption on a photo that belongs to another place",
-      async () => {
-        const { photo } = await withPhotoInTheMiddle();
-        const elsewhere = unwrap(await commands().addPlace(city({ name: "Cusco" })));
-        return commands().updatePhotoCaption({ placeId: elsewhere.id, photoId: photo.id, caption: "not mine" });
-      },
-      "photo-not-in-this-place",
-    ],
-    [
-      "editing a caption on a photo that isn't there at all",
-      async () => {
-        const { place } = await withPhotoInTheMiddle();
-        return commands().updatePhotoCaption({ placeId: place.id, photoId: "nope", caption: "nothing" });
-      },
-      "photo-not-in-this-place",
-    ],
-    [
-      "a caption for a place that doesn't exist",
-      () => commands().updatePhotoCaption({ placeId: "nope", photoId: "nope", caption: "" }),
-      "unknown-place",
-    ],
-    ["a caption sent as nothing at all", () => commands().updatePhotoCaption(null as never), "unknown-place"],
     [
       "deleting a photo that belongs to another place",
       async () => {

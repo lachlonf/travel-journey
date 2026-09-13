@@ -7,34 +7,23 @@ import { FormStatus } from "@/app/admin/FormStatus";
 import type { CommandResult } from "@/lib/admin-commands";
 import type { Photo } from "@/lib/types";
 
-/** The captions being written, and the saved ones they were seeded from. */
-interface Captions {
-  byId: Record<string, string>;
-  seeded: string;
-}
-
-const savedCaptions = (photos: Photo[]) => JSON.stringify(photos.map((p) => [p.id, p.caption]));
-
-const seed = (photos: Photo[]): Captions => ({
-  byId: Object.fromEntries(photos.map((p) => [p.id, p.caption])),
-  seeded: savedCaptions(photos),
-});
-
 /** A place's photos, in the order its story shows them: say something new about one, or remove it for good. */
 export function PhotoEditor({ placeId, photos }: { placeId: string; photos: Photo[] }) {
   const router = useRouter();
-  const [captions, setCaptions] = useState<Captions>(() => seed(photos));
+  /**
+   * Only the captions the owner has actually typed. Every other photo shows what's saved, so
+   * the refresh after saving one photo can't throw away what they were writing on another.
+   */
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<{ error?: string; message?: string }>({});
   /** Which photo is mid-save or mid-delete, so only its own buttons wait. */
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
 
-  // Seeding again rather than remounting keeps the confirmation of the save that caused it on screen.
-  const saved = savedCaptions(photos);
-  if (captions.seeded !== saved) setCaptions(seed(photos));
+  const captionOf = (photo: Photo) => drafts[photo.id] ?? photo.caption;
 
   /** Runs one photo's change, reporting whatever the command says about it. */
-  async function run(photoId: string, work: () => Promise<CommandResult<Photo>>, done: string) {
+  async function run(photoId: string, work: () => Promise<CommandResult<Photo>>, success: string) {
     setBusy(photoId);
     setStatus({});
     try {
@@ -44,9 +33,14 @@ export function PhotoEditor({ placeId, photos }: { placeId: string; photos: Phot
         setConfirming(null);
         return;
       }
-      setStatus({ message: done });
+      setStatus({ message: success });
       setConfirming(null);
-      // The page hands back the photos as they now are, which seeds the captions again.
+      // What was written is now what's saved, so this photo goes back to following the store.
+      setDrafts((current) => {
+        const rest = { ...current };
+        delete rest[photoId];
+        return rest;
+      });
       router.refresh();
     } catch (error) {
       setStatus({ error: error instanceof Error ? error.message : "Something went wrong." });
@@ -65,7 +59,7 @@ export function PhotoEditor({ placeId, photos }: { placeId: string; photos: Phot
         {photos.map((photo, index) => {
           // What the buttons call this photo, so each one says which photo it acts on.
           const what = photo.caption || `photo ${index + 1}`;
-          const caption = captions.byId[photo.id] ?? "";
+          const caption = captionOf(photo);
 
           return (
             <li key={photo.id} className="photo-item">
@@ -79,7 +73,7 @@ export function PhotoEditor({ placeId, photos }: { placeId: string; photos: Phot
                 aria-label={`Caption for ${what}`}
                 onChange={(event) => {
                   const written = event.target.value;
-                  setCaptions((current) => ({ ...current, byId: { ...current.byId, [photo.id]: written } }));
+                  setDrafts((current) => ({ ...current, [photo.id]: written }));
                 }}
               />
 

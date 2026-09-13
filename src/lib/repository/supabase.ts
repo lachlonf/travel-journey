@@ -175,8 +175,9 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
 
     async deletePhoto(id) {
       const { storage_path } = unwrap<PhotoRow>(await client.from("photos").select("*").eq("id", id).single());
-      // The file goes first: a row whose file is missing is skipped by the read model,
-      // while a file whose row is gone would stay reachable by URL with nothing pointing at it.
+      // The file goes first, because the point of deleting a photo is that its URL stops working:
+      // an object left behind stays reachable by anyone holding the link. If the row delete then
+      // fails, the place shows a broken image until it's deleted again, which is visible and fixable.
       const removed = await client.storage.from(PHOTO_BUCKET).remove([storage_path]);
       if (removed.error) throw new Error(removed.error.message);
       unwrap(await client.from("photos").delete().eq("id", id));
