@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { JourneyData, Photo, Place, StoryBlock, Trip } from "../types";
-import { extensionFor, type JourneyRepository } from "./types";
+import { extensionFor, type JourneyRepository, type UploadedFile, type UploadTarget, UPLOAD_TARGET_TTL_MS } from "./types";
 
 /** Data as it may sit on disk: saved before story blocks, a place's story was one text and each photo had a sort order. */
 interface SavedJourney {
@@ -34,17 +34,69 @@ export interface LocalRepositoryOptions {
   seedFile: string;
   uploadsDir: string;
   publicUrlPrefix: string;
+  /** How long an upload target lasts. Defaults to the shared expiry. */
+  uploadTargetTtlMs?: number;
+}
+
+/** Where this store's upload targets point: the dev-only endpoint that takes the bytes. */
+const DEV_UPLOAD_PATH = "/api/dev-uploads";
+
+/** What the dev upload endpoint made of the bytes it was sent. */
+export type LocalUploadReceipt = "stored" | "unknown-upload" | "wrong-content-type";
+
+/** A target handed out and not yet spent: the one place and one file type it's good for. */
+interface PendingUpload {
+  placeId: string;
+  contentType: string;
+  expiresAt: number;
 }
 
 // The turbopackIgnore comments keep these dev-only paths from dragging the whole project into the deploy bundle.
 
-async function readJson(path: string): Promise<SavedJourney | null> {
+async function readIfPresent(path: string): Promise<Buffer | null> {
   try {
-    return JSON.parse(await readFile(/* turbopackIgnore: true */ path, "utf8"));
+    return await readFile(/* turbopackIgnore: true */ path);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+}
+
+async function readJson(path: string): Promise<SavedJourney | null> {
+  const contents = await readIfPresent(path);
+  return contents ? JSON.parse(contents.toString("utf8")) : null;
+}
+
+// Upload ids reach us back from a URL, so only an id shaped like one we handed out ever becomes a path.
+const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Deliberately not under uploadsDir: that folder is served to the public as it stands, and bytes
+// nobody has confirmed yet aren't part of the journal. They wait beside the data file instead.
+const pendingDir = (options: LocalRepositoryOptions) => join(dirname(options.dataFile), "pending-uploads");
+const pendingRecord = (options: LocalRepositoryOptions, uploadId: string) => join(pendingDir(options), `${uploadId}.json`);
+const pendingBytes = (options: LocalRepositoryOptions, uploadId: string) => join(pendingDir(options), `${uploadId}.bin`);
+
+/** The target behind this id while it's still good for something, and null once it isn't. */
+async function readPending(options: LocalRepositoryOptions, uploadId: string): Promise<PendingUpload | null> {
+  if (!UPLOAD_ID.test(uploadId)) return null;
+  const contents = await readIfPresent(pendingRecord(options, uploadId));
+  if (!contents) return null;
+  const pending: PendingUpload = JSON.parse(contents.toString("utf8"));
+  return Date.now() >= pending.expiresAt ? null : pending;
+}
+
+/**
+ * What the dev-only upload endpoint does with the bytes it receives, so that endpoint stays a thin
+ * HTTP wrapper. A target only takes the file type it was handed out for, and only until it expires.
+ */
+export async function receiveLocalUpload(options: LocalRepositoryOptions, uploadId: string, file: UploadedFile): Promise<LocalUploadReceipt> {
+  const pending = await readPending(options, uploadId);
+  if (!pending) return "unknown-upload";
+  if (file.contentType !== pending.contentType) return "wrong-content-type";
+
+  await mkdir(/* turbopackIgnore: true */ pendingDir(options), { recursive: true });
+  await writeFile(/* turbopackIgnore: true */ pendingBytes(options, uploadId), file.bytes);
+  return "stored";
 }
 
 /** File-backed store for local development, so the app runs before Supabase is set up. */
@@ -61,6 +113,18 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
     await writeFile(/* turbopackIgnore: true */ options.dataFile, JSON.stringify(data, null, 2));
     return result;
   }
+
+  const addPhoto = async (input: Parameters<JourneyRepository["addPhoto"]>[0], file: UploadedFile): Promise<Photo> => {
+    const id = randomUUID();
+    const fileName = `${id}.${extensionFor(file.contentType)}`;
+    await mkdir(/* turbopackIgnore: true */ options.uploadsDir, { recursive: true });
+    await writeFile(join(/* turbopackIgnore: true */ options.uploadsDir, fileName), file.bytes);
+    return update((data) => {
+      const photo = { ...input, id, url: `${options.publicUrlPrefix}/${fileName}` };
+      data.photos.push(photo);
+      return photo;
+    });
+  };
 
   // The store's own id goes last, so an id smuggled in with the input can't replace it.
   return {
@@ -114,17 +178,42 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
         current.photos = current.photos.filter((p) => p.placeId !== id);
       });
     },
-    async addPhoto(input, file) {
-      const id = randomUUID();
-      const fileName = `${id}.${extensionFor(file.contentType)}`;
-      await mkdir(/* turbopackIgnore: true */ options.uploadsDir, { recursive: true });
-      await writeFile(join(/* turbopackIgnore: true */ options.uploadsDir, fileName), file.bytes);
-      return update((data) => {
-        const photo = { ...input, id, url: `${options.publicUrlPrefix}/${fileName}` };
-        data.photos.push(photo);
-        return photo;
-      });
+    addPhoto,
+
+    /**
+     * A target the browser can PUT to, backed by the dev-only endpoint that writes into the uploads
+     * folder. It's written down rather than held in memory, because preparing and confirming are
+     * separate requests and the file arrives in a third.
+     */
+    async createUploadTarget({ placeId, contentType }) {
+      const uploadId = randomUUID();
+      const pending: PendingUpload = { placeId, contentType, expiresAt: Date.now() + (options.uploadTargetTtlMs ?? UPLOAD_TARGET_TTL_MS) };
+      await mkdir(/* turbopackIgnore: true */ pendingDir(options), { recursive: true });
+      await writeFile(/* turbopackIgnore: true */ pendingRecord(options, uploadId), JSON.stringify(pending));
+
+      return {
+        uploadId,
+        url: `${DEV_UPLOAD_PATH}/${uploadId}`,
+        method: "PUT",
+        headers: { "content-type": contentType },
+        expiresAt: pending.expiresAt,
+      } satisfies UploadTarget;
     },
+
+    async finalizeUpload(uploadId, details) {
+      const pending = await readPending(options, uploadId);
+      if (!pending) return null;
+      const bytes = await readIfPresent(pendingBytes(options, uploadId));
+      // Nothing arrived, so there's no photo to record: the journal never shows a broken image.
+      if (!bytes) return null;
+
+      const photo = await addPhoto({ ...details, placeId: pending.placeId }, { bytes: new Uint8Array(bytes), contentType: pending.contentType });
+      // The target is spent, so the same id can't record the same file a second time.
+      await rm(/* turbopackIgnore: true */ pendingRecord(options, uploadId), { force: true });
+      await rm(/* turbopackIgnore: true */ pendingBytes(options, uploadId), { force: true });
+      return photo;
+    },
+
     updatePhoto: (id, changes) =>
       update((data) => {
         const index = data.photos.findIndex((p) => p.id === id);

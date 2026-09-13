@@ -180,6 +180,16 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
       return photoFromRow(unwrap<PhotoRow>(await client.from("photos").insert(row).select().single()));
     },
 
+    // Signed upload URLs into the photos bucket come with direct uploads on Supabase. Until then the
+    // browser keeps sending photos through the server action, which addPhoto above still handles.
+    async createUploadTarget() {
+      throw new Error("Direct uploads aren't set up for Supabase yet.");
+    },
+
+    async finalizeUpload() {
+      throw new Error("Direct uploads aren't set up for Supabase yet.");
+    },
+
     async updatePhoto(id, changes) {
       const row = toRow<NewPhoto, PhotoRow>(photoColumns, changes);
       return photoFromRow(unwrap<PhotoRow>(await client.from("photos").update(row).eq("id", id).select().single()));

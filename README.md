@@ -78,7 +78,7 @@ Working end to end:
 Not built yet:
 
 - Arranging a place's story in the admin. Stories are ordered text and photo blocks, but for now the admin writes the story text as one block and new photos land at the end.
-- Uploading straight from the browser to Supabase Storage. Photos currently pass through a server action, so they're resized in the browser first to stay under Vercel's ~4.5 MB request limit; HEIC files that Chrome can't decode aren't resized.
+- Uploading straight from the browser. The server side is in place — preparing an upload hands out a target scoped to one place, one file type and a few minutes, and confirming it records the photo only once the file has arrived — and the local store backs its targets with a dev-only endpoint that writes into `public/uploads/`. The browser still posts photos through a server action, and the Supabase store's targets aren't built yet, so photos are resized in the browser first to stay under Vercel's ~4.5 MB request limit; HEIC files that Chrome can't decode aren't resized.
 - Deleting places
 - Editing a place's visit dates
 - A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)

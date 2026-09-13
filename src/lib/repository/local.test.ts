@@ -1,19 +1,20 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fixture } from "../__fixtures__/journey";
 import { buildJourney } from "../journey";
-import { createLocalRepository } from "./local";
+import { createLocalRepository, receiveLocalUpload, type LocalRepositoryOptions } from "./local";
 
 let dir: string;
-const open = () =>
-  createLocalRepository({
-    dataFile: join(dir, "data", "journey.json"),
-    seedFile: join(dir, "seed.json"),
-    uploadsDir: join(dir, "uploads"),
-    publicUrlPrefix: "/uploads",
-  });
+const options = (): LocalRepositoryOptions => ({
+  dataFile: join(dir, "data", "journey.json"),
+  seedFile: join(dir, "seed.json"),
+  uploadsDir: join(dir, "uploads"),
+  publicUrlPrefix: "/uploads",
+});
+const open = () => createLocalRepository(options());
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "journey-"));
@@ -107,6 +108,31 @@ describe("local repository", () => {
       ["photo", "p1"],
     ]);
     expect(story("cusco")).toEqual([]);
+  });
+
+  const jpeg = { bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" };
+
+  it("takes bytes at an upload target and stores them as a photo of the place it was handed out for", async () => {
+    const target = await open().createUploadTarget({ placeId: "huaraz", contentType: "image/jpeg" });
+
+    expect(target.url).toBe(`/api/dev-uploads/${target.uploadId}`);
+    expect(await receiveLocalUpload(options(), target.uploadId, jpeg)).toBe("stored");
+    const photo = await open().finalizeUpload(target.uploadId, { caption: "the lake", takenAt: null, lat: null, lng: null });
+
+    // The place comes from the target, so confirming an upload can't put the photo somewhere else.
+    expect(photo!.placeId).toBe("huaraz");
+    expect(photo!.url).toMatch(/^\/uploads\/[\w-]+\.jpg$/);
+    expect([...(await readFile(join(dir, "uploads", basename(photo!.url))))]).toEqual([1, 2, 3]);
+    expect((await open().load()).photos).toEqual([photo]);
+  });
+
+  it("keeps bytes nobody has confirmed out of the folder the public is served from", async () => {
+    const target = await open().createUploadTarget({ placeId: "huaraz", contentType: "image/jpeg" });
+
+    expect(await receiveLocalUpload(options(), target.uploadId, jpeg)).toBe("stored");
+
+    // public/uploads is served as it stands, so a file no photo points at yet mustn't be sitting in it.
+    expect(existsSync(join(dir, "uploads"))).toBe(false);
   });
 
   it("stores uploaded photo bytes and serves them from the public prefix", async () => {

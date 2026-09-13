@@ -1,6 +1,14 @@
 import { isValidLatLng } from "./geo";
 import { findCityPlace } from "./journey";
-import { isAllowedImageType, type JourneyRepository, type NewTrip, type UploadedFile } from "./repository/types";
+import {
+  isAllowedImageType,
+  type JourneyRepository,
+  type NewPhoto,
+  type NewTrip,
+  type UploadedFile,
+  type UploadRequest,
+  type UploadTarget,
+} from "./repository/types";
 import type { JourneyData, Photo, Place, PlaceKind, StoryBlock, Trip } from "./types";
 
 /** A refusal the owner can act on. Codes are stable; messages are for people. */
@@ -18,6 +26,7 @@ export type CommandError =
   | { code: "invalid-story"; message: string }
   | { code: "photo-not-in-this-place"; message: string }
   | { code: "duplicate-photo"; message: string }
+  | { code: "upload-not-found"; message: string }
   | { code: "unsupported-file-type"; message: string };
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: CommandError };
@@ -75,6 +84,17 @@ export interface PhotoInput {
   file: UploadedFile | null;
 }
 
+/** Saying the bytes have arrived, with everything the photo should be recorded as. */
+export interface UploadConfirmation {
+  /** The opaque id from the upload target. The place comes from the target, not from here. */
+  uploadId: string;
+  caption: string;
+  takenAt: string | null;
+  /** Where it was taken, if the photo says. Coordinates that aren't on Earth are dropped. */
+  lat: number | null;
+  lng: number | null;
+}
+
 /** Which photo the owner means: always one of a place's own photos, never a photo id on its own. */
 export interface PhotoRef {
   placeId: string;
@@ -124,6 +144,15 @@ function placeDetailsError(data: JourneyData, place: PlaceDetails): CommandError
 }
 
 type ParentCity = NonNullable<PlaceInput["parent"]>;
+
+/** What a photo records about itself, however its bytes reached us: through an action, or straight from the browser. */
+function photoDetails(input: Pick<PhotoInput, "caption" | "takenAt" | "lat" | "lng">): CommandResult<Omit<NewPhoto, "placeId">> {
+  const takenAt = text(input.takenAt) || null;
+  if (takenAt && !ISO_DATE.test(takenAt)) return fail({ code: "invalid-date", message: "Photo date must be YYYY-MM-DD." });
+
+  const located = isValidLatLng(input.lat, input.lng);
+  return ok({ caption: text(input.caption), takenAt, lat: located ? input.lat : null, lng: located ? input.lng : null });
+}
 
 /** The parent as given, or null when it has no name or its coordinates aren't on Earth. */
 function validParent(parent: PlaceInput["parent"]): ParentCity | null {
@@ -176,6 +205,23 @@ export function createAdminCommands(repository: JourneyRepository) {
     const photo = data.photos.find((p) => p.id === photoId && p.placeId === place.id);
     if (!photo) return fail({ code: "photo-not-in-this-place", message: "That photo isn't one of this place's photos." });
     return ok({ place, photo });
+  }
+
+  /**
+   * Writes down where a place's photos already sit. The read model shows photos no block mentions
+   * at the end in upload order, so writing them in that order puts the newest last either way.
+   */
+  async function writeDownPhotoOrder(placeId: string): Promise<void> {
+    const data = await repository.load();
+    const place = data.places.find((p) => p.id === placeId);
+    if (!place) return;
+
+    const referenced = new Set(place.storyBlocks.flatMap((b) => (b.type === "photo" ? [b.photoId] : [])));
+    const unmentioned = data.photos.filter((p) => p.placeId === placeId && !referenced.has(p.id));
+    if (!unmentioned.length) return;
+
+    const blocks: StoryBlock[] = [...place.storyBlocks, ...unmentioned.map((p) => ({ type: "photo" as const, photoId: p.id }))];
+    await repository.updatePlace(place.id, { storyBlocks: blocks });
   }
 
   return {
@@ -372,30 +418,55 @@ export function createAdminCommands(repository: JourneyRepository) {
 
     async addPhoto(input: PhotoInput): Promise<CommandResult<Photo>> {
       const { file } = input;
-      const takenAt = text(input.takenAt) || null;
-
       if (!file || !isAllowedImageType(file.contentType)) {
         return fail({ code: "unsupported-file-type", message: "Only JPEG, PNG, WebP, AVIF or HEIC images." });
       }
-      if (takenAt && !ISO_DATE.test(takenAt)) return fail({ code: "invalid-date", message: "Photo date must be YYYY-MM-DD." });
+
+      const details = photoDetails(input);
+      if (!details.ok) return details;
 
       const data = await repository.load();
       if (!data.places.some((p) => p.id === input.placeId)) return fail({ code: "unknown-place", message: "That place doesn't exist." });
 
       // No block for it yet: the read model appends photos no block references, so it lands at the end of the story.
-      const located = isValidLatLng(input.lat, input.lng);
-      return ok(
-        await repository.addPhoto(
-          {
-            placeId: input.placeId,
-            caption: text(input.caption),
-            takenAt,
-            lat: located ? input.lat : null,
-            lng: located ? input.lng : null,
-          },
-          file,
-        ),
-      );
+      return ok(await repository.addPhoto({ placeId: input.placeId, ...details.value }, file));
+    },
+
+    /**
+     * Permission to send one photo's bytes straight to storage, so their size doesn't depend on
+     * what the host lets through. Scoped to this place and this file type, and good only briefly,
+     * so a target that leaks can't be used to fill the storage.
+     */
+    async prepareUpload(input: UploadRequest): Promise<CommandResult<UploadTarget>> {
+      // Server actions take any payload, so a request may not even be an object.
+      if (!input || typeof input !== "object") return fail({ code: "unknown-place", message: "That place doesn't exist." });
+
+      const contentType = text(input.contentType).toLowerCase();
+      if (!isAllowedImageType(contentType)) return fail({ code: "unsupported-file-type", message: "Only JPEG, PNG, WebP, AVIF or HEIC images." });
+
+      const data = await repository.load();
+      if (!data.places.some((p) => p.id === input.placeId)) return fail({ code: "unknown-place", message: "That place doesn't exist." });
+
+      return ok(await repository.createUploadTarget({ placeId: input.placeId, contentType }));
+    },
+
+    /**
+     * Records the photo now that its file has actually arrived, at the end of the story of the place
+     * its target was scoped to. Nothing is recorded for a file that never turned up.
+     */
+    async confirmUpload(input: UploadConfirmation): Promise<CommandResult<Photo>> {
+      const notThere: CommandError = { code: "upload-not-found", message: "That upload didn't arrive, or it took too long. Try it again." };
+      // Server actions take any payload, so a confirmation may not even be an object.
+      if (!input || typeof input !== "object") return fail(notThere);
+
+      const details = photoDetails(input);
+      if (!details.ok) return details;
+
+      const photo = await repository.finalizeUpload(text(input.uploadId), details.value);
+      if (!photo) return fail(notThere);
+
+      await writeDownPhotoOrder(photo.placeId);
+      return ok(photo);
     },
 
     /** Says something new about a photo. Where it sits in the story doesn't change. */

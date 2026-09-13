@@ -11,21 +11,24 @@ import {
   type PlaceUpdate,
   type TripInput,
   type TripUpdate,
+  type UploadConfirmation,
   type VisitInput,
 } from "./admin-commands";
 import { buildJourney, tripStops } from "./journey";
-import { createLocalRepository } from "./repository/local";
+import { createLocalRepository, receiveLocalUpload, type LocalRepositoryOptions } from "./repository/local";
+import { UPLOAD_TARGET_TTL_MS } from "./repository/types";
 import type { Place } from "./types";
 
 let dir: string;
-const repository = () =>
-  createLocalRepository({
-    dataFile: join(dir, "data", "journey.json"),
-    seedFile: join(dir, "seed.json"),
-    uploadsDir: join(dir, "uploads"),
-    publicUrlPrefix: "/uploads",
-  });
-const commands = () => createAdminCommands(repository());
+const options = (overrides: Partial<LocalRepositoryOptions> = {}): LocalRepositoryOptions => ({
+  dataFile: join(dir, "data", "journey.json"),
+  seedFile: join(dir, "seed.json"),
+  uploadsDir: join(dir, "uploads"),
+  publicUrlPrefix: "/uploads",
+  ...overrides,
+});
+const repository = (overrides?: Partial<LocalRepositoryOptions>) => createLocalRepository(options(overrides));
+const commands = (overrides?: Partial<LocalRepositoryOptions>) => createAdminCommands(repository(overrides));
 const journey = async () => buildJourney(await repository().load());
 
 const city = (input: Partial<PlaceInput> = {}): PlaceInput => ({
@@ -786,6 +789,153 @@ describe("deletePlace", () => {
   it.each([
     ["deleting a place that doesn't exist", () => commands().deletePlace("nope"), "unknown-place"],
     ["a deletion sent as nothing at all", () => commands().deletePlace(null as never), "unknown-place"],
+  ] as const)("refuses %s", async (_, run, code) => {
+    const result = await run();
+    expect(result.ok ? null : result.error.code).toBe(code);
+  });
+});
+
+describe("uploads", () => {
+  const resolved = async (placeId: string) =>
+    (await journey()).storyByPlace.get(placeId)!.map((block) => (block.type === "text" ? block.text : block.photo.caption));
+
+  /** A place with something already written, so a confirmed photo has a story to land at the end of. */
+  const somewhere = async (story = "We set out at dawn.") => unwrap(await commands().addPlace(city({ story })));
+
+  const confirmation = (uploadId: string, input: Partial<UploadConfirmation> = {}): UploadConfirmation => ({
+    uploadId,
+    caption: "the lake",
+    takenAt: null,
+    lat: null,
+    lng: null,
+    ...input,
+  });
+
+  it("records the photo at the end of the story once its bytes have arrived", async () => {
+    const place = await somewhere();
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+
+    // What the browser does with a target: send the bytes to where it points, then say it's there.
+    expect(await receiveLocalUpload(options(), target.uploadId, jpeg)).toBe("stored");
+    const result = await commands().confirmUpload(confirmation(target.uploadId, { takenAt: "2025-06-07", lat: -9.2, lng: -77.5 }));
+
+    expect(result.ok).toBe(true);
+    expect(await resolved(place.id)).toEqual(["We set out at dawn.", "the lake"]);
+    const photo = unwrap(result);
+    expect([photo.placeId, photo.takenAt, photo.lat, photo.lng]).toEqual([place.id, "2025-06-07", -9.2, -77.5]);
+  });
+
+  it("hands out somewhere to send the bytes, good for this one file type", async () => {
+    const place = await somewhere();
+
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/png" }));
+
+    expect(target.url).toContain(target.uploadId);
+    expect([target.method, target.headers["content-type"]]).toEqual(["PUT", "image/png"]);
+  });
+
+  /** The blocks as they're written down, which is what the story arranger offers to move. */
+  const blocks = async (placeId: string) =>
+    (await journey()).placeById.get(placeId)!.storyBlocks.map((b) => (b.type === "text" ? b.text : b.photoId));
+
+  it("writes the photo into the story, so it's a block the owner can move", async () => {
+    const place = await somewhere();
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+    await receiveLocalUpload(options(), target.uploadId, jpeg);
+
+    const photo = unwrap(await commands().confirmUpload(confirmation(target.uploadId)));
+
+    expect(await blocks(place.id)).toEqual(["We set out at dawn.", photo.id]);
+  });
+
+  it("keeps photos in upload order when one arrives directly and another through the old path", async () => {
+    const place = await somewhere("");
+    const climb = unwrap(await commands().addPhoto({ placeId: place.id, caption: "the climb", takenAt: null, lat: null, lng: null, file: jpeg }));
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+    await receiveLocalUpload(options(), target.uploadId, jpeg);
+
+    const lake = unwrap(await commands().confirmUpload(confirmation(target.uploadId)));
+
+    expect(await resolved(place.id)).toEqual(["the climb", "the lake"]);
+    // The photo already there is written down too, so the newest still reads last.
+    expect(await blocks(place.id)).toEqual([climb.id, lake.id]);
+  });
+
+  it("hands out a target that expires shortly", async () => {
+    const place = await somewhere();
+
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+
+    expect(target.expiresAt).toBeGreaterThan(Date.now());
+    expect(target.expiresAt).toBeLessThanOrEqual(Date.now() + UPLOAD_TARGET_TTL_MS);
+  });
+
+  it("refuses to record a photo whose bytes never arrived", async () => {
+    const place = await somewhere();
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+
+    const result = await commands().confirmUpload(confirmation(target.uploadId));
+
+    expect(result.ok ? null : result.error.code).toBe("upload-not-found");
+    expect(await resolved(place.id)).toEqual(["We set out at dawn."]);
+  });
+
+  it("won't take a file of a type the target wasn't for", async () => {
+    const place = await somewhere();
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+
+    const received = await receiveLocalUpload(options(), target.uploadId, { bytes: new Uint8Array([1]), contentType: "image/png" });
+    const result = await commands().confirmUpload(confirmation(target.uploadId));
+
+    expect(received).toBe("wrong-content-type");
+    // The bytes were turned away, so there's still nothing to confirm.
+    expect(result.ok ? null : result.error.code).toBe("upload-not-found");
+  });
+
+  it("won't take bytes for a target that has run out, or record a photo for it", async () => {
+    const stale = commands({ uploadTargetTtlMs: 0 });
+    const place = await somewhere();
+    const target = unwrap(await stale.prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+
+    const received = await receiveLocalUpload(options({ uploadTargetTtlMs: 0 }), target.uploadId, jpeg);
+    const result = await stale.confirmUpload(confirmation(target.uploadId));
+
+    expect(received).toBe("unknown-upload");
+    expect(result.ok ? null : result.error.code).toBe("upload-not-found");
+  });
+
+  it("spends the target, so one upload can't be recorded twice", async () => {
+    const place = await somewhere();
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+    await receiveLocalUpload(options(), target.uploadId, jpeg);
+    unwrap(await commands().confirmUpload(confirmation(target.uploadId)));
+
+    const again = await commands().confirmUpload(confirmation(target.uploadId, { caption: "the lake again" }));
+
+    expect(again.ok ? null : again.error.code).toBe("upload-not-found");
+    expect(await resolved(place.id)).toEqual(["We set out at dawn.", "the lake"]);
+  });
+
+  it.each([
+    [
+      "a file type that isn't an image we allow",
+      async () => commands().prepareUpload({ placeId: (await somewhere()).id, contentType: "image/svg+xml" }),
+      "unsupported-file-type",
+    ],
+    ["a target for a place that doesn't exist", () => commands().prepareUpload({ placeId: "nope", contentType: "image/jpeg" }), "unknown-place"],
+    ["a target sent as nothing at all", () => commands().prepareUpload(null as never), "unknown-place"],
+    ["an upload id that was never handed out", () => commands().confirmUpload(confirmation("nope")), "upload-not-found"],
+    ["a confirmation sent as nothing at all", () => commands().confirmUpload(null as never), "upload-not-found"],
+    [
+      "a confirmed photo with a malformed date",
+      async () => {
+        const place = await somewhere();
+        const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+        await receiveLocalUpload(options(), target.uploadId, jpeg);
+        return commands().confirmUpload(confirmation(target.uploadId, { takenAt: "yesterday" }));
+      },
+      "invalid-date",
+    ],
   ] as const)("refuses %s", async (_, run, code) => {
     const result = await run();
     expect(result.ok ? null : result.error.code).toBe(code);

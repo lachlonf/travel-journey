@@ -12,10 +12,12 @@ import {
   type PlaceUpdate,
   type StoryBlocksInput,
   type TripUpdate,
+  type UploadConfirmation,
   type VisitInput,
 } from "@/lib/admin-commands";
 import { requireAdmin } from "@/lib/auth";
 import { getRepository } from "@/lib/repository";
+import type { UploadRequest, UploadTarget } from "@/lib/repository/types";
 import { createSessionToken, passwordMatches, SESSION_COOKIE, SESSION_TTL_MS, sessionSecret } from "@/lib/session";
 import type { Photo, Place, Trip } from "@/lib/types";
 
@@ -136,6 +138,19 @@ export async function updatePhotoCaption(input: PhotoCaptionInput): Promise<Comm
 export async function deletePhoto(input: PhotoRef): Promise<CommandResult<Photo>> {
   await requireAdmin();
   const result = await commands().deletePhoto(input);
+  if (result.ok) revalidateSite();
+  return result;
+}
+
+export async function prepareUpload(input: UploadRequest): Promise<CommandResult<UploadTarget>> {
+  await requireAdmin();
+  // Nothing is recorded yet, so there's nothing for the site to show differently.
+  return commands().prepareUpload(input);
+}
+
+export async function confirmUpload(input: UploadConfirmation): Promise<CommandResult<Photo>> {
+  await requireAdmin();
+  const result = await commands().confirmUpload(input);
   if (result.ok) revalidateSite();
   return result;
 }
