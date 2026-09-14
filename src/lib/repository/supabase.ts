@@ -1,7 +1,15 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import type { Photo, Place, StoryBlock, Trip } from "../types";
-import { extensionFor, type JourneyRepository, type NewPhoto, type NewPlace, type NewTrip } from "./types";
+import {
+  extensionFor,
+  type JourneyRepository,
+  type NewPhoto,
+  type NewPlace,
+  type NewTrip,
+  UPLOAD_TARGET_TTL_MS,
+  type UploadTarget,
+} from "./types";
 
 export const PHOTO_BUCKET = "photos";
 
@@ -99,9 +107,54 @@ function unwrap<T>({ data, error }: { data: unknown; error: { message: string } 
   return data as T;
 }
 
+/** One permission to upload: which place it belongs to, where the bytes go, what they may be, and when it lapses. */
+interface SignedTarget {
+  placeId: string;
+  path: string;
+  contentType: string;
+  expiresAt: number;
+}
+
+/**
+ * A signing key of its own, derived from the service role key so there's no second secret to
+ * configure and the database credential never doubles as one.
+ */
+const signingKey = (serviceRoleKey: string) => createHmac("sha256", serviceRoleKey).update("upload-target-v1").digest();
+
+const sign = (key: Buffer, payload: string) => createHmac("sha256", key).update(payload).digest("base64url");
+
+/**
+ * The upload id carries the target itself, signed, so the store needs no table of pending uploads:
+ * the id comes back from the browser, and only one this server handed out survives the check.
+ */
+function packUploadId(key: Buffer, target: SignedTarget): string {
+  const payload = Buffer.from(JSON.stringify(target)).toString("base64url");
+  return `${payload}.${sign(key, payload)}`;
+}
+
+/** The target behind this id, or null if it wasn't signed by us or isn't shaped like one of ours. */
+function unpackUploadId(key: Buffer, uploadId: string): SignedTarget | null {
+  const [payload, signature, ...rest] = uploadId.split(".");
+  if (!payload || !signature || rest.length) return null;
+
+  // The signature is checked before the payload is read, so only our own JSON is ever parsed.
+  const expected = Buffer.from(sign(key, payload));
+  const given = Buffer.from(signature);
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+
+  const target = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SignedTarget;
+  const shaped =
+    typeof target?.placeId === "string" &&
+    typeof target.path === "string" &&
+    typeof target.contentType === "string" &&
+    typeof target.expiresAt === "number";
+  return shaped ? target : null;
+}
+
 /** Server-only: uses the service role key, so it must never reach the browser. */
 export function createSupabaseRepository(url: string, serviceRoleKey: string): JourneyRepository {
   const client = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
+  const uploadKey = signingKey(serviceRoleKey);
 
   const photoFromRow = (r: PhotoRow): Photo => ({
     id: r.id,
@@ -180,14 +233,54 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
       return photoFromRow(unwrap<PhotoRow>(await client.from("photos").insert(row).select().single()));
     },
 
-    // Signed upload URLs into the photos bucket come with direct uploads on Supabase. Until then the
-    // browser keeps sending photos through the server action, which addPhoto above still handles.
-    async createUploadTarget() {
-      throw new Error("Direct uploads aren't set up for Supabase yet.");
+    /**
+     * A signed URL the browser can PUT one photo to, so the bytes never pass through this server.
+     * The path fixes the place, and the bucket's own allowlist and size cap are the second line of
+     * defence behind the content type checked at prepare.
+     */
+    async createUploadTarget({ placeId, contentType }) {
+      const path = `${placeId}/${randomUUID()}.${extensionFor(contentType)}`;
+      const signed = await client.storage.from(PHOTO_BUCKET).createSignedUploadUrl(path);
+      if (signed.error) throw new Error(signed.error.message);
+
+      // Supabase fixes its own token at two hours and won't shorten it. Ours lapses on the stated
+      // schedule and finalizing enforces it, so a leaked target stops being able to put anything
+      // into the journal well before then — though the URL behind it still takes bytes for the
+      // full two hours, and nothing sweeps up what it leaves.
+      const expiresAt = Date.now() + UPLOAD_TARGET_TTL_MS;
+      return {
+        uploadId: packUploadId(uploadKey, { placeId, path, contentType, expiresAt }),
+        url: signed.data.signedUrl,
+        method: "PUT",
+        headers: { "content-type": contentType },
+        expiresAt,
+      } satisfies UploadTarget;
     },
 
-    async finalizeUpload() {
-      throw new Error("Direct uploads aren't set up for Supabase yet.");
+    async finalizeUpload(uploadId, details) {
+      const target = unpackUploadId(uploadKey, uploadId);
+      if (!target || Date.now() >= target.expiresAt) return null;
+
+      // What the browser says arrived doesn't count: the object has to actually be in the bucket,
+      // so the journal never records a photo whose file never turned up.
+      const found = await client.storage.from(PHOTO_BUCKET).info(target.path);
+      if (found.error || !found.data) return null;
+
+      // Storage doesn't always record a type. What it does record has to match the target; when it
+      // records nothing there's nothing to contradict, and the object is left where it is either
+      // way. Deleting a photo the owner just watched go up is the one mistake with no way back.
+      const arrived = (found.data.contentType ?? "").split(";")[0].trim().toLowerCase();
+      if (arrived && arrived !== target.contentType) return null;
+
+      // A target is good for one photo. Confirming twice would otherwise leave two rows sharing one
+      // object, and deleting either would break the other. Two confirmations racing can still slip
+      // past this, which needs a unique index on storage_path to close properly.
+      const already = unwrap<PhotoRow[]>(await client.from("photos").select("id").eq("storage_path", target.path));
+      if (already.length) return null;
+
+      // The place comes from the signed target, never from whoever confirms it.
+      const row = { ...toRow<NewPhoto, PhotoRow>(photoColumns, { ...details, placeId: target.placeId }), storage_path: target.path };
+      return photoFromRow(unwrap<PhotoRow>(await client.from("photos").insert(row).select().single()));
     },
 
     async updatePhoto(id, changes) {

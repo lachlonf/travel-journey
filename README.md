@@ -26,7 +26,7 @@ The admin is at http://localhost:3000/admin. A `.env.local` was created with `AD
 ## Connect Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. In the SQL editor, run the files in `supabase/migrations/` in order. `0001_init.sql` creates the `trips`, `places` and `photos` tables, plus a public `photos` storage bucket. `0002_story_blocks.sql` turns each place's story into ordered text and photo blocks, converting any existing rows.
+2. In the SQL editor, run the files in `supabase/migrations/` in order. `0001_init.sql` creates the `trips`, `places` and `photos` tables, plus a public `photos` storage bucket. `0002_story_blocks.sql` turns each place's story into ordered text and photo blocks, converting any existing rows, and gives the `photos` bucket an allowed-image-type list and a 25 MB per-file limit.
 3. From Project Settings → API, copy the project URL and the `service_role` key into `.env.local`:
    ```
    SUPABASE_URL=https://xxxx.supabase.co
@@ -39,7 +39,14 @@ The admin is at http://localhost:3000/admin. A `.env.local` was created with `AD
 
 The Supabase store isn't unit tested, because its tests would only prove the mocks. Run through this against a real project whenever that store changes:
 
-- [ ] Adding a trip, a city and a spot all save. (Adding a photo fails until direct uploads land on Supabase; see "Not built yet".)
+- [ ] Running `0002_story_blocks.sql` on a project holding old rows leaves every place's story reading as it did before: the old text first, then its photos in their old order.
+- [ ] Adding a trip, a city and a spot all save.
+- [ ] Adding a photo uploads it straight to the bucket: the progress bar moves, the photo appears on the place, and the object is in `photos` under the place's id.
+- [ ] Killing the network mid-upload fails that photo alone, and **Retry** sends it again without the caption being retyped.
+- [ ] A file that isn't an allowed image is refused. The admin refuses it before uploading; to see the bucket refuse it too, PUT something else (a `.txt`) to a signed URL by hand and watch it come back 400.
+- [ ] A file over 25 MB is refused by the bucket, and that photo is reported as failed rather than recorded.
+- [ ] Confirming an upload whose bytes never arrived returns "That upload didn't arrive". Prepare a target, skip the PUT, and confirm it.
+- [ ] An upload target older than ten minutes is refused on confirm, leaving no photo behind.
 - [ ] Editing a photo's caption shows the new caption on the place's page.
 - [ ] Deleting a photo removes its row _and_ the object from the `photos` bucket: its old public URL stops working.
 - [ ] Editing a place's details and arranging its story both survive a reload.
@@ -79,13 +86,13 @@ Working end to end:
 Not built yet:
 
 - Arranging a place's story in the admin. Stories are ordered text and photo blocks, but for now the admin writes the story text as one block and new photos land at the end.
-- Direct uploads on Supabase. The browser now uploads straight to storage, which the local store backs with a dev-only endpoint writing into `public/uploads/`. The Supabase store doesn't hand out signed upload URLs yet, so **uploading a photo fails when the app runs against Supabase** until that lands. Everything else works there.
 - Converting HEIC for browsers that can't decode it. Such a photo goes up as it came off the camera, with a warning that it may not display for visitors on non-Apple devices.
 - Deleting places
 - Editing a place's visit dates
 - A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)
 - Sharper imagery when zoomed into a city (the earth texture is 2048px)
 - Route lines between a trip's stops
+- Sweeping up uploads nobody confirmed. Supabase signs an upload URL for two hours and won't sign it for less, so bytes that arrive after the target lapses, or that are never confirmed, sit in the bucket unreferenced until they're removed by hand.
 - An offline upload queue
 - Login rate limiting (failed attempts are only slowed down)
 - Colour unlock for countries too small for the atlas; their pins still work

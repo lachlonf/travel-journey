@@ -29,4 +29,15 @@ set story_blocks =
 alter table places drop column story;
 alter table photos drop column sort_order;
 
+-- Photos now go straight from the browser into the bucket on a signed URL, so the bucket is the
+-- last thing standing between a stray upload and the public journal: it takes images the site can
+-- show and nothing else (no SVG, which can carry scripts), and refuses anything oversized.
+-- Written as an insert so a bucket someone made by hand in the dashboard is locked down too,
+-- rather than this quietly matching no rows and leaving the limits off with nothing to show for it.
+insert into storage.buckets (id, name, public, allowed_mime_types, file_size_limit)
+values ('photos', 'photos', true, array['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/heic'], 25 * 1024 * 1024)
+on conflict (id) do update
+set allowed_mime_types = excluded.allowed_mime_types,
+    file_size_limit = excluded.file_size_limit;
+
 commit;
