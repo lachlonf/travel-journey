@@ -37,18 +37,18 @@ The admin is at http://localhost:3000/admin. A `.env.local` was created with `AD
 
 ### Check Supabase by hand
 
-The Supabase store isn't unit tested, because its tests would only prove the mocks. Run through this against a real project whenever that store changes:
+The Supabase store isn't unit tested, because its tests would only prove the mocks. Run through this against a real project whenever that store changes. Last run in full on 18 September 2026:
 
 - [ ] Running `0002_story_blocks.sql` on a project holding old rows leaves every place's story reading as it did before: the old text first, then its photos in their old order.
 - [ ] Adding a trip, a city and a spot all save.
 - [ ] Adding a photo uploads it straight to the bucket: the progress bar moves, the photo appears on the place, and the object is in `photos` under the place's id.
 - [ ] Killing the network mid-upload fails that photo alone, and **Retry** sends it again without the caption being retyped.
-- [ ] A file that isn't an allowed image is refused. The admin refuses it before uploading; to see the bucket refuse it too, PUT something else (a `.txt`) to a signed URL by hand and watch it come back 400.
-- [ ] A file over 25 MB is refused by the bucket, and that photo is reported as failed rather than recorded.
+- [ ] A file that isn't an allowed image is refused. The admin refuses it on **Upload**, naming the types it takes; to see the bucket refuse it too, PUT something else (a `.txt`) to a signed URL by hand and watch it come back 400.
+- [ ] A file over 25 MB is refused by the bucket, and that photo is reported as failed rather than recorded. Photos the browser can decode are resized to 2400px and re-encoded before they go up, so they land well under the cap: test this with something the browser can't decode, such as a large HEIC outside Safari, which goes up as it came off the camera.
 - [ ] Confirming an upload whose bytes never arrived returns "That upload didn't arrive". Prepare a target, skip the PUT, and confirm it.
 - [ ] An upload target older than ten minutes is refused on confirm, leaving no photo behind.
 - [ ] Editing a photo's caption shows the new caption on the place's page.
-- [ ] Deleting a photo removes its row _and_ the object from the `photos` bucket: its old public URL stops working.
+- [ ] Deleting a photo removes its row _and_ the object from the `photos` bucket: its old public URL stops working within about a minute. Storage reports it gone at once, but the CDN keeps serving a copy it has already cached; adding a query string to the URL shows the 400 straight away.
 - [ ] Editing a place's details and arranging its story both survive a reload.
 - [ ] Deleting a trip leaves its places on the globe, now on no trip.
 - [ ] Deleting a spot removes its row _and_ its photos' objects from the `photos` bucket; deleting a city with spots left is refused.
@@ -92,6 +92,7 @@ Not built yet:
 - A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)
 - Sharper imagery when zoomed into a city (the earth texture is 2048px)
 - Route lines between a trip's stops
+- Checking that an uploaded file really is an image. Both the admin and the bucket go on the type the browser declares, which follows the file's name, so a file named `.jpg` that holds something else is stored and shown as a broken image. It's served as an image and can't run as one, so this is a mess rather than a danger.
 - Sweeping up uploads nobody confirmed. Supabase signs an upload URL for two hours and won't sign it for less, so bytes that arrive after the target lapses, or that are never confirmed, sit in the bucket unreferenced until they're removed by hand.
 - An offline upload queue
 - Login rate limiting (failed attempts are only slowed down)
