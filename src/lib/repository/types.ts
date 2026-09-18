@@ -50,8 +50,9 @@ export interface JourneyRepository {
    * Records an arrived file as a photo of the place its target was scoped to, and spends the target
    * so the same one can't record a second photo. Null whenever there's nothing to record: the id is
    * unknown or has expired, its bytes never arrived, what arrived isn't the type the target was for,
-   * or that target has already been recorded. The place the photo belongs to comes from the target,
-   * never from whoever confirms it.
+   * what arrived isn't really an image of that type once its bytes are read, or that target has
+   * already been recorded. The place the photo belongs to comes from the target, never from whoever
+   * confirms it.
    */
   finalizeUpload(uploadId: string, details: Omit<NewPhoto, "placeId">): Promise<Photo | null>;
   /** Changes only the fields given. Throws if the photo doesn't exist. */

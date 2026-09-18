@@ -110,7 +110,9 @@ describe("local repository", () => {
     expect(story("cusco")).toEqual([]);
   });
 
-  const jpeg = { bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" };
+  // Real JPEG leading bytes: finalizing reads them, so [1, 2, 3] would be turned away as not a photo.
+  const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  const jpeg = { bytes: jpegBytes, contentType: "image/jpeg" };
 
   it("takes bytes at an upload target and stores them as a photo of the place it was handed out for", async () => {
     const target = await open().createUploadTarget({ placeId: "huaraz", contentType: "image/jpeg" });
@@ -122,7 +124,7 @@ describe("local repository", () => {
     // The place comes from the target, so confirming an upload can't put the photo somewhere else.
     expect(photo!.placeId).toBe("huaraz");
     expect(photo!.url).toMatch(/^\/uploads\/[\w-]+\.jpg$/);
-    expect([...(await readFile(join(dir, "uploads", basename(photo!.url))))]).toEqual([1, 2, 3]);
+    expect([...(await readFile(join(dir, "uploads", basename(photo!.url))))]).toEqual([...jpegBytes]);
     expect((await open().load()).photos).toEqual([photo]);
   });
 
@@ -135,15 +137,28 @@ describe("local repository", () => {
     expect(existsSync(join(dir, "uploads"))).toBe(false);
   });
 
+  it("records nothing for a file whose bytes aren't the image it was declared as", async () => {
+    const target = await open().createUploadTarget({ placeId: "huaraz", contentType: "image/jpeg" });
+    const text = { bytes: new Uint8Array([...Buffer.from("not a photo")]), contentType: "image/jpeg" };
+
+    // The declared type is all the dev endpoint sees, and it agrees, so the bytes are taken.
+    expect(await receiveLocalUpload(options(), target.uploadId, text)).toBe("stored");
+    expect(await open().finalizeUpload(target.uploadId, { caption: "the lake", takenAt: null, lat: null, lng: null })).toBeNull();
+
+    // Nothing reached the journal, and nothing reached the folder the public is served from.
+    expect((await open().load()).photos).toEqual([]);
+    expect(existsSync(join(dir, "uploads"))).toBe(false);
+  });
+
   it("stores uploaded photo bytes and serves them from the public prefix", async () => {
     const photo = await open().addPhoto(
       { placeId: "huaraz", caption: "the lake", takenAt: "2025-06-07", lat: -9.2, lng: -77.5 },
-      { bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" },
+      { bytes: jpegBytes, contentType: "image/jpeg" },
     );
 
     expect(photo.url).toMatch(/^\/uploads\/[\w-]+\.jpg$/);
     const bytes = await readFile(join(dir, "uploads", photo.url.replace("/uploads/", "")));
-    expect([...bytes]).toEqual([1, 2, 3]);
+    expect([...bytes]).toEqual([...jpegBytes]);
     expect((await open().load()).photos).toEqual([photo]);
   });
 });

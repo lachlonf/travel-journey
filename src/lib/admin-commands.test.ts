@@ -43,7 +43,8 @@ const city = (input: Partial<PlaceInput> = {}): PlaceInput => ({
   ...input,
 });
 
-const jpeg = { bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" };
+// Confirming an upload reads the file's first bytes, so the fixture starts the way a JPEG really does.
+const jpeg = { bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), contentType: "image/jpeg" };
 
 /** For setup steps, which must succeed. */
 function unwrap<T>(result: CommandResult<T>): T {
@@ -887,6 +888,22 @@ describe("uploads", () => {
     expect(received).toBe("wrong-content-type");
     // The bytes were turned away, so there's still nothing to confirm.
     expect(result.ok ? null : result.error.code).toBe("upload-not-found");
+  });
+
+  it("won't record a text file that was renamed to look like a photo", async () => {
+    const place = await somewhere();
+    const target = unwrap(await commands().prepareUpload({ placeId: place.id, contentType: "image/jpeg" }));
+    const renamed = { bytes: new Uint8Array([...Buffer.from("not a photo")]), contentType: "image/jpeg" };
+
+    // The browser reads the type off the file's name, so a renamed text file is declared image/jpeg
+    // and passes every check up to this one. Only its bytes say otherwise.
+    const received = await receiveLocalUpload(options(), target.uploadId, renamed);
+    const result = await commands().confirmUpload(confirmation(target.uploadId));
+
+    expect(received).toBe("stored");
+    expect(result.ok ? null : result.error.code).toBe("upload-not-found");
+    // So the place's story is as it was, with no broken image in it.
+    expect(await resolved(place.id)).toEqual(["We set out at dawn."]);
   });
 
   it("won't take bytes for a target that has run out, or record a photo for it", async () => {

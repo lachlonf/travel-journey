@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { JourneyData, Photo, Place, StoryBlock, Trip } from "../types";
+import { bytesLookLike } from "./image-bytes";
 import { extensionFor, type JourneyRepository, type UploadedFile, type UploadTarget, UPLOAD_TARGET_TTL_MS } from "./types";
 
 /** Data as it may sit on disk: saved before story blocks, a place's story was one text and each photo had a sort order. */
@@ -206,6 +207,11 @@ export function createLocalRepository(options: LocalRepositoryOptions): JourneyR
       const bytes = await readIfPresent(pendingBytes(options, uploadId));
       // Nothing arrived, so there's no photo to record: the journal never shows a broken image.
       if (!bytes) return null;
+
+      // The declared type came from the file's name and has been taken on trust the whole way here.
+      // This is where the bytes themselves are read, so a renamed text file doesn't become a photo.
+      // What isn't a photo waits where an unconfirmed upload waits, outside the folder served publicly.
+      if (!bytesLookLike(pending.contentType, new Uint8Array(bytes))) return null;
 
       const photo = await addPhoto({ ...details, placeId: pending.placeId }, { bytes: new Uint8Array(bytes), contentType: pending.contentType });
       // The target is spent, so the same id can't record the same file a second time.

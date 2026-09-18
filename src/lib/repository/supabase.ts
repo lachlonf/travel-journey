@@ -1,6 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Photo, Place, StoryBlock, Trip } from "../types";
+import { bytesLookLike, IMAGE_SIGNATURE_BYTES } from "./image-bytes";
 import {
   extensionFor,
   type JourneyRepository,
@@ -151,6 +152,32 @@ function unpackUploadId(key: Buffer, uploadId: string): SignedTarget | null {
   return shaped ? target : null;
 }
 
+/** Long enough to fetch a few bytes, short enough that the URL is useless by the time it could leak. */
+const HEAD_URL_TTL_SECONDS = 60;
+
+/** An object too short to hold a signature: asking for bytes it doesn't have is how storage says so. */
+const RANGE_NOT_SATISFIABLE = 416;
+
+/**
+ * The first bytes of a stored object. Fetched over a range request rather than downloaded, so
+ * confirming a photo doesn't pull a whole holiday snap back through this server, which is the point
+ * of uploading straight to storage. A server that ignores the range sends more than was asked for,
+ * which costs bandwidth but still answers the question.
+ *
+ * Failing to read throws rather than answering with nothing, so a network blip is never mistaken
+ * for a file that isn't a photo: the owner sees something went wrong, not that their upload is gone.
+ */
+async function readHead(client: SupabaseClient, path: string): Promise<Uint8Array> {
+  const signed = await client.storage.from(PHOTO_BUCKET).createSignedUrl(path, HEAD_URL_TTL_SECONDS);
+  if (signed.error || !signed.data) throw new Error(signed.error?.message ?? `Couldn't read back ${path}.`);
+
+  const response = await fetch(signed.data.signedUrl, { headers: { range: `bytes=0-${IMAGE_SIGNATURE_BYTES - 1}` } });
+  // Too short to be any image, so the empty head below is turned away as one.
+  if (response.status === RANGE_NOT_SATISFIABLE) return new Uint8Array();
+  if (!response.ok) throw new Error(`Couldn't read back ${path}: ${response.status}.`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
 /** Server-only: uses the service role key, so it must never reach the browser. */
 export function createSupabaseRepository(url: string, serviceRoleKey: string): JourneyRepository {
   const client = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
@@ -271,6 +298,12 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
       // way. Deleting a photo the owner just watched go up is the one mistake with no way back.
       const arrived = (found.data.contentType ?? "").split(";")[0].trim().toLowerCase();
       if (arrived && arrived !== target.contentType) return null;
+
+      // Every check so far — the browser, the bucket's allowlist, the type storage recorded — rests
+      // on the type the browser declared, which it read off the file's name. The bytes are the only
+      // thing that can contradict it, so the object's first few are read back here. What isn't a
+      // photo is left in the bucket where an unconfirmed upload is left, to be removed by hand.
+      if (!bytesLookLike(target.contentType, await readHead(client, target.path))) return null;
 
       // A target is good for one photo. Confirming twice would otherwise leave two rows sharing one
       // object, and deleting either would break the other. Two confirmations racing can still slip
