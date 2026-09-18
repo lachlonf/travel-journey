@@ -83,18 +83,17 @@ Working end to end:
 - Editing a place: its name, coordinates, country code, trip, and the city a spot folds into
 - Editing a trip: its name, dates and story, and dissolving a trip without losing its places
 - Editing a place's photos: rewriting a caption, and deleting a photo with its stored file
+- Arranging a place's story in the admin: text and photo blocks moved into the order they're read in
+- Deleting a place, along with its photos and their stored files
+- Recording a return visit to a place, so a city visited twice keeps both dates
+- Turning away an upload whose bytes aren't the image its name claims, checked when the upload is confirmed
 
 Not built yet:
 
-- Arranging a place's story in the admin. Stories are ordered text and photo blocks, but for now the admin writes the story text as one block and new photos land at the end.
 - Converting HEIC for browsers that can't decode it. Such a photo goes up as it came off the camera, with a warning that it may not display for visitors on non-Apple devices.
-- Deleting places
-- Editing a place's visit dates
-- A second visit to a city you've already added (adding it again is refused; there's no "add another date" yet)
 - Sharper imagery when zoomed into a city (the earth texture is 2048px)
 - Route lines between a trip's stops
-- Checking that an uploaded file really is an image. Both the admin and the bucket go on the type the browser declares, which follows the file's name, so a file named `.jpg` that holds something else is stored and shown as a broken image. It's served as an image and can't run as one, so this is a mess rather than a danger.
-- Sweeping up uploads nobody confirmed. Supabase signs an upload URL for two hours and won't sign it for less, so bytes that arrive after the target lapses, or that are never confirmed, sit in the bucket unreferenced until they're removed by hand.
+- Sweeping up uploads nobody confirmed. Supabase signs an upload URL for two hours and won't sign it for less, so bytes that arrive after the target lapses, that are never confirmed, or that are turned away for not being the image they claim, sit in the bucket unreferenced until they're removed by hand.
 - An offline upload queue
 - Login rate limiting (failed attempts are only slowed down)
 - Colour unlock for countries too small for the atlas; their pins still work
