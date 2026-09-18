@@ -22,6 +22,7 @@ The admin is at http://localhost:3000/admin. A `.env.local` was created with `AD
 | `npm run typecheck` | TypeScript            |
 | `npm run lint`      | ESLint                |
 | `npm run build`     | Production build      |
+| `npm run sweep`     | Sweep unused uploads  |
 
 ## Connect Supabase
 
@@ -46,13 +47,27 @@ The Supabase store isn't unit tested, because its tests would only prove the moc
 - [ ] A file that isn't an allowed image is refused. The admin refuses it on **Upload**, naming the types it takes; to see the bucket refuse it too, PUT something else (a `.txt`) to a signed URL by hand and watch it come back 400.
 - [ ] A file over 25 MB is refused by the bucket, and that photo is reported as failed rather than recorded. Photos the browser can decode are resized to 2400px and re-encoded before they go up, so they land well under the cap: test this with something the browser can't decode, such as a large HEIC outside Safari, which goes up as it came off the camera.
 - [ ] Confirming an upload whose bytes never arrived returns "That upload didn't arrive". Prepare a target, skip the PUT, and confirm it.
-- [ ] A text file renamed `fake-photo.jpg` is refused on confirm with "That upload didn't arrive", and no photo appears on the place. The browser declares it `image/jpeg` on its name, so everything up to confirming takes it; confirming reads its first bytes. The object stays in the bucket, like an upload nobody confirmed, until it's removed by hand.
+- [ ] A text file renamed `fake-photo.jpg` is refused on confirm with "That upload didn't arrive", and no photo appears on the place. The browser declares it `image/jpeg` on its name, so everything up to confirming takes it; confirming reads its first bytes. The object stays in the bucket, like an upload nobody confirmed; `npm run sweep` lists it a day later, and `npm run sweep -- --delete` collects it.
 - [ ] An upload target older than ten minutes is refused on confirm, leaving no photo behind.
 - [ ] Editing a photo's caption shows the new caption on the place's page.
 - [ ] Deleting a photo removes its row _and_ the object from the `photos` bucket: its old public URL stops working within about a minute. Storage reports it gone at once, but the CDN keeps serving a copy it has already cached; adding a query string to the URL shows the 400 straight away.
 - [ ] Editing a place's details and arranging its story both survive a reload.
 - [ ] Deleting a trip leaves its places on the globe, now on no trip.
 - [ ] Deleting a spot removes its row _and_ its photos' objects from the `photos` bucket; deleting a city with spots left is refused.
+- [ ] `npm run sweep` names no object that a photo points at, and leaves the fake above alone until a day has passed. A day later it lists it, and `npm run sweep -- --delete` removes exactly what was listed, leaving every real photo on its place.
+
+### Sweep unreferenced uploads
+
+Bytes reach the `photos` bucket that no photo ever points at. Supabase signs an upload URL for two hours and won't sign it for less, so bytes can arrive long after our own ten-minute target has lapsed; a browser can go away between sending them and confirming them; and bytes turned away for not being the image they claimed are left where they are on purpose, because deleting what someone just watched go up is the one mistake with no way back.
+
+```bash
+npm run sweep              # lists what no photo points at, and removes nothing
+npm run sweep -- --delete  # removes exactly what the listing showed
+```
+
+An object is collected only when no `photos.storage_path` row points at it *and* it is over a day old. The age matters: an upload being confirmed right now has no row either, so a young object is never touched. Rows pointing at an object that has gone are reported as their own section and never acted on.
+
+Run it yourself, when you mean to. Nothing schedules it.
 
 ## Deploy
 
@@ -67,6 +82,7 @@ Import the repo into Vercel and set `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABAS
   - `session.ts`, `exif.ts` and `cities.ts` cover the admin cookie, reading photo GPS and dates, and city search.
 - **`src/components/globe/`** is the Three.js engine. It renders the globe off-screen, storing each country's unlock progress in the alpha channel. A second pass then draws locked pixels as glyphs and lets unlocked pixels show through. The reveal sweeps west to east, glyph by glyph, with a shimmer at the front. Each browser plays a country's unlock once, remembered in `localStorage`.
 - **`src/lib/repository/`** holds the Supabase store and the local JSON store, both behind one interface.
+- **`scripts/`** holds what's run by hand rather than by the app. `sweep.ts` collects bucket objects no photo points at; it runs on Node directly, which is why the imports it reaches name their `.ts` files.
 - **`src/app/`** has the pages: `/` landing, `/explore`, `/trips/[id]` (story mode), `/admin`, `/admin/trips/[id]` (editing one trip) and `/admin/places/[id]` (editing one place).
 
 ## Scaffold status
@@ -87,13 +103,13 @@ Working end to end:
 - Deleting a place, along with its photos and their stored files
 - Recording a return visit to a place, so a city visited twice keeps both dates
 - Turning away an upload whose bytes aren't the image its name claims, checked when the upload is confirmed
+- Sweeping up the objects that leaves behind: `npm run sweep` lists what no photo points at, and removes it when asked
 
 Not built yet:
 
 - Converting HEIC for browsers that can't decode it. Such a photo goes up as it came off the camera, with a warning that it may not display for visitors on non-Apple devices.
 - Sharper imagery when zoomed into a city (the earth texture is 2048px)
 - Route lines between a trip's stops
-- Sweeping up uploads nobody confirmed. Supabase signs an upload URL for two hours and won't sign it for less, so bytes that arrive after the target lapses, that are never confirmed, or that are turned away for not being the image they claim, sit in the bucket unreferenced until they're removed by hand.
 - An offline upload queue
 - Login rate limiting (failed attempts are only slowed down)
 - Colour unlock for countries too small for the atlas; their pins still work

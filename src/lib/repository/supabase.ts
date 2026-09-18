@@ -1,7 +1,10 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Photo, Place, StoryBlock, Trip } from "../types";
-import { bytesLookLike, IMAGE_SIGNATURE_BYTES } from "./image-bytes";
+// These two carry `.ts` because the sweep script reaches this module through plain Node, which
+// resolves what the import says and nothing else. Everything else here is a type, and erased.
+import { bytesLookLike, IMAGE_SIGNATURE_BYTES } from "./image-bytes.ts";
+import { planSweep, type StoredObject, type SweepPlan } from "./sweep.ts";
 import {
   extensionFor,
   type JourneyRepository,
@@ -10,7 +13,7 @@ import {
   type NewTrip,
   UPLOAD_TARGET_TTL_MS,
   type UploadTarget,
-} from "./types";
+} from "./types.ts";
 
 export const PHOTO_BUCKET = "photos";
 
@@ -331,4 +334,74 @@ export function createSupabaseRepository(url: string, serviceRoleKey: string): J
       unwrap(await client.from("photos").delete().eq("id", id));
     },
   };
+}
+
+/** One page of a listing. Supabase caps a page at a thousand entries, so that is what it's asked for. */
+const LIST_PAGE_SIZE = 1000;
+
+/** Everything directly under one prefix, followed through as many pages as it takes. */
+async function listUnder(client: SupabaseClient, prefix: string) {
+  const entries = [];
+  for (let offset = 0; ; offset += LIST_PAGE_SIZE) {
+    const page = await client.storage.from(PHOTO_BUCKET).list(prefix, { limit: LIST_PAGE_SIZE, offset });
+    if (page.error) throw new Error(page.error.message);
+    entries.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < LIST_PAGE_SIZE) return entries;
+  }
+}
+
+/** The zero-byte object Supabase drops in a prefix to keep it visible. Not a photo, and not ours to collect. */
+const FOLDER_PLACEHOLDER = ".emptyFolderPlaceholder";
+
+/**
+ * Every photo object in the bucket. Photos live at `<placeId>/<uuid>.<ext>`, so the root listing is
+ * one of folders and each has to be opened in turn; a listing has no recursive mode. A folder entry
+ * is the one with no id of its own, which is how the two are told apart.
+ *
+ * Only objects one level down are returned. Anything sitting in the root got there by some route
+ * that isn't this app, and could never have a row pointing at it, so sweeping it would mean every
+ * run deleting bytes nobody here wrote.
+ */
+async function listObjects(client: SupabaseClient): Promise<StoredObject[]> {
+  const objects: StoredObject[] = [];
+  for (const folder of await listUnder(client, "")) {
+    if (folder.id) continue;
+    for (const file of await listUnder(client, folder.name)) {
+      if (!file.id || file.name === FOLDER_PLACEHOLDER) continue;
+      objects.push({ path: `${folder.name}/${file.name}`, createdAt: file.created_at ?? null });
+    }
+  }
+  return objects;
+}
+
+/** How many paths go in one removal call, so a bucket with a lot to collect doesn't send one huge request. */
+const REMOVE_BATCH_SIZE = 100;
+
+/**
+ * Collects objects in the photo bucket that no photo row points at. Deliberately not a method on
+ * `JourneyRepository`: the local store has no sweep and isn't getting one, and an interface with a
+ * method one store can only stub would describe neither honestly. `receiveLocalUpload` is the same
+ * arrangement the other way around.
+ *
+ * Reports by default and removes nothing. Deleting is opt-in because the bytes it collects are
+ * unrecoverable and, by construction, were last seen by someone watching an upload bar: the run
+ * that lists them is meant to be read before the run that removes them.
+ */
+export async function sweepPhotoBucket(url: string, serviceRoleKey: string, deleteOrphans = false): Promise<SweepPlan> {
+  const client = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
+
+  // The rows are read after the listing, never before: a photo confirmed while the listing was
+  // running is then still seen as referenced, where the other order would read it as an orphan.
+  const objects = await listObjects(client);
+  const rows = unwrap<Pick<PhotoRow, "storage_path">[]>(await client.from("photos").select("storage_path"));
+
+  const plan = planSweep(objects, rows.map((r) => r.storage_path), Date.now());
+  if (!deleteOrphans) return plan;
+
+  const paths = plan.orphaned.map((o) => o.path);
+  for (let i = 0; i < paths.length; i += REMOVE_BATCH_SIZE) {
+    const removed = await client.storage.from(PHOTO_BUCKET).remove(paths.slice(i, i + REMOVE_BATCH_SIZE));
+    if (removed.error) throw new Error(removed.error.message);
+  }
+  return plan;
 }
