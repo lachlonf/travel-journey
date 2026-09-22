@@ -1,6 +1,6 @@
 # Journey
 
-A personal travel globe instead of social media. The world is drawn in ASCII glyphs; the countries you've been to dissolve into real colour. Drill in from country to city to specific spot, read the story and photos for each place, or follow a trip from stop to stop.
+A personal travel journal. Experience my travel journey with me and relive memories!
 
 ## Run it locally
 
