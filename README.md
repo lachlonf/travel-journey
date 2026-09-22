@@ -80,7 +80,7 @@ Import the repo into Vercel and set `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABAS
   - `navigation.ts` handles the three drill-in levels, which pins show at each, and where the camera goes.
   - `geo.ts` has the sphere maths and the arcing great-circle camera flights.
   - `session.ts`, `exif.ts` and `cities.ts` cover the admin cookie, reading photo GPS and dates, and city search.
-- **`src/components/globe/`** is the Three.js engine. It renders the globe off-screen, storing each country's unlock progress in the alpha channel. A second pass then draws locked pixels as glyphs and lets unlocked pixels show through. The reveal sweeps west to east, glyph by glyph, with a shimmer at the front. Each browser plays a country's unlock once, remembered in `localStorage`.
+- **`src/components/globe/`** is the Three.js engine. It renders the globe off-screen as one fact per channel: ink density, which country, how lit, and how far that country's unlock has swept past. A second pass then draws locked pixels as ink glyphs on paper, and blooms unlocked ones into their country's tapestry hue. The bloom sweeps west to east, glyph by glyph, behind a front of that same hue steeped darker. Each browser plays a country's unlock once, remembered in `localStorage`.
 - **`src/lib/repository/`** holds the Supabase store and the local JSON store, both behind one interface.
 - **`scripts/`** holds what's run by hand rather than by the app. `sweep.ts` collects bucket objects no photo points at; it runs on Node directly, which is why the imports it reaches name their `.ts` files.
 - **`src/app/`** has the pages: `/` landing, `/explore`, `/trips/[id]` (story mode), `/admin`, `/admin/trips/[id]` (editing one trip) and `/admin/places/[id]` (editing one place).

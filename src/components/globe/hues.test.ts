@@ -16,7 +16,8 @@ describe("writeTapestryHues", () => {
   it("puts a country's hue in the row the shader looks it up by", () => {
     const rows = new Uint8Array(256 * 4);
     writeTapestryHues(rows, [{ code: "PE", index: 7 }]);
-    expect(row(rows, 7)).toEqual(bytes(tapestryHue("PE")));
+    // Cochineal, #a8324a, as the three bytes a shader reads back as that colour.
+    expect(row(rows, 7)).toEqual([168, 50, 74]);
   });
 
   it("gives a country outside the palette the fallback rather than nothing", () => {

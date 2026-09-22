@@ -66,6 +66,10 @@ _Avoid_: reveal, highlight, activate
 The colour a country wears once unlocked, drawn from a small curated palette. A country has one; a trip has none.
 _Avoid_: country colour, theme colour, accent
 
+**Dye**:
+A country's own tapestry hue steeped darker, which is what the unlock's sweeping front is drawn in. Dark-on-light is the only contrast paper has, so the front reads by deepening rather than by brightening, and never by introducing a colour of its own.
+_Avoid_: shimmer, glow, highlight
+
 **Print**:
 A photograph as it appears in a story: matted, very slightly tilted, resting on the paper as a physical print would. Prints never overlap, apart from one deliberate interlocked pair per story.
 _Avoid_: image, thumbnail, card, tile

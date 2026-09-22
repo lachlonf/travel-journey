@@ -103,12 +103,14 @@ vec3 hueAt(vec4 pixel) {
 }
 
 /**
- * The sweep front: the hue steeped darker than it will settle. Dark-on-light is
- * the only contrast paper has, and taking the front from the country's own hue
- * keeps the globe down to one colour at a time.
+ * The sweep front: the colour steeped darker than it will settle. Dark-on-light
+ * is the only contrast paper has, and taking the front from the country's own
+ * hue keeps the globe down to one colour at a time. Steeped from the hue as it
+ * falls here rather than from the raw hue, so the front reads the same crossing
+ * a country at the rim as at the centre, where the two would otherwise close up.
  */
-vec3 dye(vec3 hue) {
-  return hue * 0.45;
+vec3 dye(vec3 settled) {
+  return settled * 0.45;
 }
 
 float glyph(float index, vec2 local) {
@@ -125,10 +127,10 @@ void main() {
 
   // Per pixel, so coastlines cut cleanly through half-bloomed cells.
   if (here.a >= threshold) {
-    vec3 hue = hueAt(here);
+    vec3 settled = hueAt(here) * here.b;
     float edge = 1.0 - smoothstep(0.0, 0.12, here.a - threshold);
     float settling = 1.0 - step(0.999, here.a);
-    gl_FragColor = vec4(mix(hue * here.b, dye(hue), edge * settling * 0.8), 1.0);
+    gl_FragColor = vec4(mix(settled, dye(settled), edge * settling * 0.8), 1.0);
     return;
   }
 
@@ -146,7 +148,7 @@ void main() {
   float pending = centre.a > 0.0 ? 1.0 - smoothstep(0.0, 0.1, threshold - centre.a) : 0.0;
   if (pending > 0.0) {
     index = 1.0 + floor(hash(cell + floor(time * 18.0)) * (glyphCount - 1.0));
-    ink = mix(ink, dye(hueAt(centre)), pending);
+    ink = mix(ink, dye(hueAt(centre) * centre.b), pending);
   }
 
   gl_FragColor = vec4(mix(PAPER, ink, glyph(index, local)), 1.0);

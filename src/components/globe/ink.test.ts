@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { asciiFragment } from "./shaders";
+import * as ink from "./ink";
 import { channels, glslVec3, INK, PAPER, type Hex } from "./ink";
 
 const stylesheet = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
@@ -49,8 +50,8 @@ describe("the glyph pass", () => {
     }
   });
 
-  it("holds no colour beyond the paper and the one ink, so tapestry hue is the only colour on the globe", () => {
-    const declared = [...asciiFragment.matchAll(/const vec3 (\w+)/g)].map(([, name]) => name);
-    expect(declared).toEqual(["PAPER", "INK"]);
+  it("has no third colour to be compiled with, so tapestry hue is the only colour on the globe", () => {
+    const colours = Object.entries(ink).filter(([, value]) => typeof value === "string" && value.startsWith("#"));
+    expect(colours.map(([name]) => name)).toEqual(["PAPER", "INK"]);
   });
 });

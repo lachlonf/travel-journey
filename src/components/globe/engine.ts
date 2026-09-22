@@ -68,7 +68,8 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
   camera.position.set(...latLngToVector3(5, -65, 1 + WORLD_ALTITUDE));
   camera.lookAt(0, 0, 0);
 
-  // Pass 1 renders the globe off-screen, with each pixel's unlock progress in alpha.
+  // Pass 1 renders the globe off-screen as one fact per channel: ink density,
+  // which country, how lit, and how far the unlock has swept past.
   const unlockData = new Uint8Array(256 * 4);
   const unlockTexture = new THREE.DataTexture(unlockData, 256, 1);
   unlockTexture.needsUpdate = true;
