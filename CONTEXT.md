@@ -66,6 +66,10 @@ _Avoid_: reveal, highlight, activate
 The colour a country wears once unlocked, drawn from a small curated palette. A country has one; a trip has none.
 _Avoid_: country colour, theme colour, accent
 
+**Seam**:
+The line where two unlocked countries meet, drawn in the dye of whichever country it is stitching. Two neighbours can wear the same colour, and a country that has bloomed carries no glyphs to separate them, so the seam is what keeps them two countries.
+_Avoid_: border, outline, stroke
+
 **Dye**:
 A country's own tapestry hue steeped darker, which is what the unlock's sweeping front is drawn in. Dark-on-light is the only contrast paper has, so the front reads by deepening rather than by brightening, and never by introducing a colour of its own.
 _Avoid_: shimmer, glow, highlight

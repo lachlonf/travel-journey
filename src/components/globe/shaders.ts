@@ -113,6 +113,25 @@ vec3 dye(vec3 settled) {
   return settled * 0.45;
 }
 
+/**
+ * Whether another country starts at the pixel next door: the seam where two woven
+ * panels meet. Two neighbours can wear the same colour — both uncurated, so both in
+ * undyed alpaca — and a bloomed country carries no glyphs to tell them apart, so
+ * without a seam they read as one country. Only country against country is stitched;
+ * a coastline already has the paper to end against, and an unvisited neighbour is
+ * still glyphs.
+ */
+float elsewhere(float country, vec2 uv) {
+  float next = texture2D(scene, uv).g;
+  return next > 0.0 && abs(next - country) > 0.5 / 255.0 ? 1.0 : 0.0;
+}
+
+float seam(vec4 pixel, vec2 uv) {
+  vec2 texel = 1.0 / resolution;
+  float apart = max(elsewhere(pixel.g, uv + vec2(texel.x, 0.0)), elsewhere(pixel.g, uv - vec2(texel.x, 0.0)));
+  return max(apart, max(elsewhere(pixel.g, uv + vec2(0.0, texel.y)), elsewhere(pixel.g, uv - vec2(0.0, texel.y))));
+}
+
 float glyph(float index, vec2 local) {
   return texture2D(glyphs, vec2((index + local.x) / glyphCount, local.y)).r;
 }
@@ -127,7 +146,8 @@ void main() {
 
   // Per pixel, so coastlines cut cleanly through half-bloomed cells.
   if (here.a >= threshold) {
-    vec3 settled = hueAt(here) * here.b;
+    vec3 woven = hueAt(here) * here.b;
+    vec3 settled = mix(woven, dye(woven), seam(here, vUv) * 0.7);
     float edge = 1.0 - smoothstep(0.0, 0.12, here.a - threshold);
     float settling = 1.0 - step(0.999, here.a);
     gl_FragColor = vec4(mix(settled, dye(settled), edge * settling * 0.8), 1.0);
