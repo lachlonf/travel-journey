@@ -43,6 +43,10 @@ const city = (input: Partial<PlaceInput> = {}): PlaceInput => ({
   ...input,
 });
 
+/** Laguna 513, folded into the Huaraz that `city()` builds. */
+const spotInput = (input: Partial<PlaceInput> = {}): PlaceInput =>
+  city({ kind: "spot", name: "Laguna 513", lat: -9.2112, lng: -77.5466, parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 }, ...input });
+
 // Confirming an upload reads the file's first bytes, so the fixture starts the way a JPEG really does.
 const jpeg = { bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), contentType: "image/jpeg" };
 
@@ -71,15 +75,7 @@ describe("addPlace", () => {
   it("adds a spot under a new parent city that joins no trip and records no visit", async () => {
     const trip = unwrap(await commands().createTrip({ name: "South America 2025", story: "", startDate: "2025-06-01", endDate: "2025-07-10" }));
     const result = await commands().addPlace(
-      city({
-        kind: "spot",
-        name: "Laguna 513",
-        lat: -9.2112,
-        lng: -77.5466,
-        tripId: trip.id,
-        visitedOn: "2025-06-07",
-        parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 },
-      }),
+      spotInput({ tripId: trip.id, visitedOn: "2025-06-07", parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 } }),
     );
 
     expect(result.ok).toBe(true);
@@ -133,7 +129,7 @@ describe("updatePlace", () => {
   });
 
   const carhuaz = { name: "Carhuaz", lat: -9.28194, lng: -77.64472 };
-  const laguna513 = () => city({ kind: "spot", name: "Laguna 513", lat: -9.2112, lng: -77.5466, parent: carhuaz });
+  const laguna513 = () => spotInput({ parent: carhuaz });
   const spotUpdate = (spot: Place, input: Partial<PlaceUpdate>): PlaceUpdate => ({
     id: spot.id,
     name: spot.name,
@@ -404,7 +400,7 @@ describe("validation", () => {
     ["a place with a country name for a code", () => commands().addPlace(city({ countryCode: "Peru" })), "invalid-country"],
     ["a place with a malformed visit date", () => commands().addPlace(city({ visitedOn: "5 June" })), "invalid-date"],
     ["a place on a trip that doesn't exist", () => commands().addPlace(city({ tripId: "nope" })), "unknown-trip"],
-    ["a spot without a city", () => commands().addPlace(city({ kind: "spot", parent: null })), "parent-city-required"],
+    ["a spot without a city", () => commands().addPlace(spotInput({ parent: null })), "parent-city-required"],
     ["an update sent as nothing at all", () => commands().updatePlace(null as never), "unknown-place"],
     ["an update to a place that doesn't exist", () => update({ id: "nope" }), "unknown-place"],
     ["renaming a place to nothing", () => update({ name: "  " }), "name-required"],
@@ -703,7 +699,7 @@ describe("deletePlace", () => {
   const cityWithSpot = async () => {
     const huaraz = unwrap(await commands().addPlace(city()));
     const spot = unwrap(
-      await commands().addPlace(city({ kind: "spot", name: "Laguna 513", lat: -9.2112, lng: -77.5466, parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 } })),
+      await commands().addPlace(spotInput()),
     );
     return { huaraz, spot };
   };
