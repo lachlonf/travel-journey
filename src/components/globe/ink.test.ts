@@ -1,21 +1,23 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { asciiFragment } from "./shaders";
-import { glslVec3, INK, PAPER, SHIMMER } from "./palette";
+import { channels, glslVec3, INK, PAPER, SHIMMER, type Hex } from "./ink";
 
 const stylesheet = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
 function token(name: string): string {
-  return stylesheet.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`))![1];
+  const found = stylesheet.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`));
+  if (!found) throw new Error(`globals.css has no --${name} written as a six-digit hex`);
+  return found[1];
 }
 
 /** Rough perceived brightness, enough to tell ink from paper. */
-function brightness(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255);
+function brightness(hex: Hex): number {
+  const [r, g, b] = channels(hex);
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
-describe("the globe's palette", () => {
+describe("the globe's paper and ink", () => {
   it("draws on the same paper the page does, because the glyph pass is opaque", () => {
     expect(PAPER).toBe(token("paper"));
   });
@@ -42,12 +44,12 @@ describe("glslVec3", () => {
 });
 
 describe("the glyph pass", () => {
-  it("is compiled with the palette rather than with colours of its own", () => {
+  it("is compiled with these colours rather than with colours of its own", () => {
     for (const [name, colour] of [
       ["PAPER", PAPER],
       ["INK", INK],
       ["SHIMMER", SHIMMER],
-    ]) {
+    ] as const) {
       expect(asciiFragment).toContain(`const vec3 ${name} = ${glslVec3(colour)};`);
     }
   });

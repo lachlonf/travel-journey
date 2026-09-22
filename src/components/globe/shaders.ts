@@ -1,4 +1,4 @@
-import { glslVec3, INK, PAPER, SHIMMER } from "./palette";
+import { glslVec3, INK, PAPER, SHIMMER } from "./ink";
 
 export const globeVertex = /* glsl */ `
 varying vec2 vUv;
