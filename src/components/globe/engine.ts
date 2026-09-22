@@ -5,11 +5,22 @@ import type { CountryNode } from "@/lib/journey";
 import { WORLD_ALTITUDE, type CameraTarget, type Pin } from "@/lib/navigation";
 import { buildCountryMask, countryIndexAt, type CountryMask } from "./countryMask";
 import { createGlyphAtlas, GLYPH_RAMP } from "./glyphs";
+import {
+  asVariant,
+  createHueTexture,
+  DEMO_COUNTRIES,
+  prototypeGlobeFragment,
+  VARIANT_FRAGMENTS,
+  writeHue,
+  type VariantKey,
+} from "./prototype-unlock";
 import { detectQuality } from "./quality";
-import { asciiFragment, fullscreenVertex, globeFragment, globeVertex } from "./shaders";
+import { fullscreenVertex, globeVertex } from "./shaders";
 
 const UNLOCK_MS = 1800;
 const UNLOCK_STAGGER_MS = 450;
+// PROTOTYPE (#18): 9000 / 6000 runs the sweep in slow motion, which is the only way
+// to actually look at the front rather than at where it ended up.
 const SEEN_KEY = "journey:seen-countries";
 /** Must match the story panel's CSS. */
 const PANEL_WIDTH_REM = 34;
@@ -52,7 +63,12 @@ function rememberSeen(code: string): void {
   }
 }
 
-export function createGlobeEngine(container: HTMLElement, options: { onCountryClick(code: string): void }): GlobeEngine {
+// PROTOTYPE (#18): the engine draws whichever unlock treatment `?variant=` names.
+export function createGlobeEngine(
+  container: HTMLElement,
+  options: { onCountryClick(code: string): void; variant?: VariantKey },
+): GlobeEngine {
+  const variant = asVariant(options.variant);
   const quality = detectQuality();
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -76,7 +92,7 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
 
   const globeMaterial = new THREE.ShaderMaterial({
     vertexShader: globeVertex,
-    fragmentShader: globeFragment,
+    fragmentShader: prototypeGlobeFragment,
     uniforms: {
       earthMap: { value: blank as THREE.Texture },
       countryMask: { value: blank as THREE.Texture },
@@ -86,17 +102,20 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
   const globe = new THREE.Mesh(new THREE.SphereGeometry(1, quality.segments, quality.segments / 2), globeMaterial);
   const scene = new THREE.Scene();
   scene.add(globe);
-  const sceneTarget = new THREE.WebGLRenderTarget(1, 1);
+  // PROTOTYPE: pass 1 packs a country index in green, so it must not be filtered.
+  const sceneTarget = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+  const hue = createHueTexture();
 
   // Pass 2 draws that image as glyphs, except where a country has unlocked.
   const glyphs = createGlyphAtlas();
   const asciiMaterial = new THREE.ShaderMaterial({
     vertexShader: fullscreenVertex,
-    fragmentShader: asciiFragment,
+    fragmentShader: VARIANT_FRAGMENTS[variant],
     depthTest: false,
     depthWrite: false,
     uniforms: {
       scene: { value: sceneTarget.texture },
+      hueTex: { value: hue.texture },
       glyphs: { value: glyphs },
       glyphCount: { value: GLYPH_RAMP.length },
       resolution: { value: new THREE.Vector2(1, 1) },
@@ -164,11 +183,14 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
     let firstNew: UnlockableCountry | undefined;
     let queued = 0;
 
-    for (const country of unlocked) {
+    // PROTOTYPE: extra countries so neighbouring hues can be judged against each other.
+    for (const country of [...unlocked, ...DEMO_COUNTRIES]) {
       // Microstates below the atlas's resolution have no shape to colour; their pins still work.
       const index = country.numericId ? mask.indexByNumericId.get(country.numericId) : undefined;
       if (!index) continue;
       wanted.add(index);
+      writeHue(hue.data, index, country.code);
+      hue.texture.needsUpdate = true;
       if (unlockData[index * 4] === 255 || unlocking.has(index)) continue;
 
       if (seen.has(country.code) || reducedMotion) {
@@ -363,7 +385,7 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
       cancelAnimationFrame(frameId);
       observer.disconnect();
       controls.dispose();
-      for (const resource of [globe.geometry, globeMaterial, quad.geometry, asciiMaterial, sceneTarget, unlockTexture, blank, glyphs]) {
+      for (const resource of [globe.geometry, globeMaterial, quad.geometry, asciiMaterial, sceneTarget, unlockTexture, hue.texture, blank, glyphs]) {
         resource.dispose();
       }
       earthTexture?.dispose();

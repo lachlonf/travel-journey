@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Journey } from "@/lib/journey";
 import { cameraTarget, visiblePins, type Nav, type NavAction, type Pin } from "@/lib/navigation";
 import { createGlobeEngine, supportsWebGL, type GlobeEngine } from "./engine";
+import type { VariantKey } from "./prototype-unlock";
 
 export interface JourneyGlobeProps {
   journey: Journey;
@@ -13,6 +14,8 @@ export interface JourneyGlobeProps {
   /** On phones, extra height above the bottom sheet that's covered by other controls. */
   sheetReserveRem?: number;
   onNavigate: (action: NavAction) => void;
+  /** PROTOTYPE (#18): which unlock treatment to draw. Remounts the engine when it changes. */
+  variant?: VariantKey;
 }
 
 function actionFor(pin: Pin, nav: Nav): NavAction {
@@ -21,29 +24,33 @@ function actionFor(pin: Pin, nav: Nav): NavAction {
   return { type: "openPlace", placeId: pin.id };
 }
 
-export default function JourneyGlobe({ journey, nav, panelOpen, sheetReserveRem = 0, onNavigate }: JourneyGlobeProps) {
+export default function JourneyGlobe({ journey, nav, panelOpen, sheetReserveRem = 0, onNavigate, variant }: JourneyGlobeProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<GlobeEngine | null>(null);
   const pinElements = useRef(new Map<string, HTMLElement>());
-  const latest = useRef({ journey, onNavigate });
+  const latest = useRef({ journey, onNavigate, nav });
   const [webgl] = useState(supportsWebGL);
   const pins = useMemo(() => visiblePins(journey, nav), [journey, nav]);
 
   useEffect(() => {
-    latest.current = { journey, onNavigate };
+    latest.current = { journey, onNavigate, nav };
   });
 
   useEffect(() => {
     if (!webgl || !hostRef.current) return;
     const engine = createGlobeEngine(hostRef.current, {
       onCountryClick: (country) => latest.current.onNavigate({ type: "openCountry", country }),
+      variant,
     });
     engineRef.current = engine;
+    // PROTOTYPE: a variant switch rebuilds the engine, so re-feed it what the other effects already sent.
+    engine.setUnlocked(latest.current.journey.countries);
+    engine.setPins(visiblePins(latest.current.journey, latest.current.nav), pinElements.current);
     return () => {
       engine.dispose();
       engineRef.current = null;
     };
-  }, [webgl]);
+  }, [webgl, variant]);
 
   useEffect(() => {
     engineRef.current?.setUnlocked(journey.countries);
