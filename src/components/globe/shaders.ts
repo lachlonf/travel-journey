@@ -1,3 +1,5 @@
+import { glslVec3, INK, PAPER, SHIMMER } from "./palette";
+
 export const globeVertex = /* glsl */ `
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -34,14 +36,18 @@ void main() {
   float unlock = clamp(info.r * 1.6 - across * 0.6, 0.0, 1.0);
 
   float facing = clamp(dot(normalize(vNormal), normalize(vViewDir)), 0.0, 1.0);
-  // Brighter land and dimmer sea, so continents come through as denser glyphs
-  // and unlocked countries don't look murky.
   float land = step(0.5, country);
-  vec3 surface = texture2D(earthMap, vUv).rgb * (0.3 + 0.8 * facing) * mix(0.65, 1.45, land);
-  // A thin haze at the limb outlines the globe, in glyphs and in colour alike.
-  vec3 haze = vec3(0.45, 0.62, 0.85) * pow(1.0 - facing, 3.0) * 0.5;
+  // Brighter land and dimmer sea, so continents come through as denser glyphs
+  // and unlocked countries don't look murky. Land also gets a flat lift on top
+  // of the scaling: forest is nearly as dark as water in the texture, and close
+  // in, where nothing is foreshortened, that leaves a coastline with no edge.
+  vec3 surface = texture2D(earthMap, vUv).rgb * (0.3 + 0.8 * facing) * mix(0.65, 1.45, land) + land * 0.1;
+  // The glyph pass reads this image's brightness as ink density, so the limb is
+  // pushed into the brightness here: without it the sketch has no edge against
+  // the paper, and the globe reads as a pale ring rather than a world.
+  float limb = pow(1.0 - facing, 3.0) * 0.55;
 
-  gl_FragColor = vec4(surface + haze, unlock);
+  gl_FragColor = vec4(surface + limb, unlock);
 }
 `;
 
@@ -69,9 +75,9 @@ uniform float time;
 
 varying vec2 vUv;
 
-const vec3 PAPER = vec3(0.035, 0.043, 0.039);
-const vec3 INK = vec3(0.72, 0.86, 0.74);
-const vec3 SHIMMER = vec3(1.0, 0.78, 0.42);
+const vec3 PAPER = ${glslVec3(PAPER)};
+const vec3 INK = ${glslVec3(INK)};
+const vec3 SHIMMER = ${glslVec3(SHIMMER)};
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -97,9 +103,16 @@ void main() {
     return;
   }
 
-  float level = smoothstep(0.04, 0.55, dot(centre.rgb, vec3(0.299, 0.587, 0.114)));
+  // The ramp starts below black so the sea, which is only just above it, still
+  // gets the faintest glyph: on paper an empty cell is nothing at all, and the
+  // oceans would read as holes torn in the sketch rather than as water. Off the
+  // globe there is no brightness at all, so the paper around it stays bare.
+  float level = smoothstep(-0.06, 0.62, dot(centre.rgb, vec3(0.299, 0.587, 0.114)));
   float index = floor(level * (glyphCount - 1.0) + 0.5);
-  vec3 ink = INK * (0.35 + 0.65 * level);
+  // Ink only ever darkens paper, so the ramp is a wash of ink over the ground
+  // with a floor under it: the faintest glyph is still a mark, where scaling the
+  // ink towards the paper would let the ocean disappear.
+  vec3 ink = mix(PAPER, INK, 0.18 + 0.82 * level);
 
   float pending = centre.a > 0.0 ? 1.0 - smoothstep(0.0, 0.1, threshold - centre.a) : 0.0;
   if (pending > 0.0) {
