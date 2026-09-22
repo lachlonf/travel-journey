@@ -145,8 +145,10 @@ function ProgressNote({ progress }: { progress: PhotoProgress }) {
   const percent = Math.round(progress.sent * 100);
   return (
     <div className="photo-progress" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Upload progress">
-      <span style={{ width: `${percent}%` }} />
-      <em>{percent}%</em>
+      <span className="photo-progress-track">
+        <span style={{ width: `${percent}%` }} />
+      </span>
+      <span className="photo-progress-count">{percent}%</span>
     </div>
   );
 }

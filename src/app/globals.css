@@ -1,31 +1,51 @@
 @import "tailwindcss";
 
-/* One committed look: phosphor glyphs on near-black, warm amber for anything alive. */
+/*
+ * One committed look: printed matter before screens. The whole site rests on
+ * paper — an off-white, faintly grained ground — and is drawn in exactly one
+ * ink, the early-web hyperlink blue aged down. Hierarchy comes from the weight
+ * of the impression (--ink, --ink-dim, --line, --line-faint), never from a
+ * second colour: the only colour in the interface is a country's tapestry hue
+ * on the globe, and the photographs themselves.
+ */
 :root {
-  --paper: #090b0a;
-  --paper-raised: #101412;
-  --paper-glass: rgb(9 11 10 / 0.84);
-  --ink: #d3e3d5;
-  --ink-soft: #e9f0ea;
-  --ink-dim: #7f9183;
-  --line: #243029;
-  --shimmer: #ffc76b;
-  --error: #ff9a85;
-  --mono: var(--font-mono-face), ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --serif: var(--font-serif-face), Georgia, "Times New Roman", serif;
+  --paper: #f4f1e9;
+  /* A sheet resting on the ground: brighter than it, so objects read as objects. */
+  --paper-raised: #fbf9f3;
+  --paper-glass: color-mix(in srgb, var(--paper) 88%, transparent);
+  --ink: #1c1cc9;
+  /* The same ink, a lighter impression. Holds 4.98:1 on paper, so meta stays legible. */
+  --ink-dim: color-mix(in srgb, var(--ink) 72%, transparent);
+  /* Rules a control is bounded by (3.5:1), and rules that are only decoration. */
+  --line: color-mix(in srgb, var(--ink) 58%, transparent);
+  --line-faint: color-mix(in srgb, var(--ink) 26%, transparent);
+  /* The faintest impression of all: a fill, where --line-faint is a rule. */
+  --ink-faint: color-mix(in srgb, var(--ink) 9%, transparent);
+  /* The grain of the paper, defined once here and never mixed by hand. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.17'/%3E%3C/svg%3E");
+  --display: var(--font-display-face), "Gill Sans", "Gill Sans MT", "Trebuchet MS", sans-serif;
+  --body: var(--font-body-face), Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --meta: var(--font-meta-face), Courier, "Courier New", ui-monospace, monospace;
   --gutter: clamp(1rem, 3vw, 1.5rem);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
-html,
-body {
-  background: var(--paper);
+/*
+ * The grain, applied once to the ground itself rather than as an overlay, so it
+ * can never fall across a photograph. It sits on the root element so it is the
+ * page canvas — it covers the viewport however short the document is — and
+ * everything resting on the paper (panels, prints, the globe canvas) covers it
+ * as an object would.
+ */
+html {
+  background-color: var(--paper);
+  background-image: var(--grain);
   color: var(--ink);
 }
 
 body {
-  font-family: var(--mono);
-  font-size: 14px;
+  font-family: var(--body);
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -34,16 +54,17 @@ a {
 }
 
 :focus-visible {
-  outline: 1px solid var(--shimmer);
-  outline-offset: 3px;
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--shimmer);
+  background: var(--ink);
   color: var(--paper);
 }
 
 .kicker {
+  font-family: var(--meta);
   font-size: 0.7rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -59,7 +80,7 @@ a {
   align-items: center;
   gap: 0.4rem;
   padding: 0.5rem 0.85rem;
-  font: inherit;
+  font-family: var(--meta);
   font-size: 0.8rem;
   color: var(--ink);
   background: var(--paper-raised);
@@ -67,23 +88,41 @@ a {
   text-decoration: none;
   cursor: pointer;
   transition:
+    background-color 0.2s,
     border-color 0.2s,
     color 0.2s;
 }
 
-.btn:hover:not(:disabled) {
-  border-color: var(--shimmer);
-  color: var(--shimmer);
-}
-
 .btn:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: default;
 }
 
-.btn-primary {
-  border-color: var(--shimmer);
-  color: var(--shimmer);
+/*
+ * Inking a control in: the one gesture every control shares, whether it is
+ * hovered, focused or chosen. Like a stamp pressed onto paper, the ink and the
+ * paper swap places — which is the only emphasis available when there is one ink.
+ */
+.btn:hover:not(:disabled),
+.btn-primary,
+.pin:hover .pin-label,
+.pin:focus-visible .pin-label,
+.segmented label:has(input:checked),
+.block-split button:hover,
+.block-split button:focus-visible {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+/* Already inked, so it presses rather than inverting. A ring would read as focus. */
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 2px 2px 0 var(--line-faint);
+}
+
+/* Destructive controls are marked by a cut rule, not by a second colour. */
+.btn-danger {
+  border-style: dashed;
 }
 
 /* Landing */
@@ -99,12 +138,11 @@ a {
 
 .landing h1 {
   margin-top: 0.75rem;
-  font-family: var(--serif);
-  font-weight: 400;
+  font-family: var(--display);
+  font-weight: 500;
   font-size: clamp(2.6rem, 8vw, 4.4rem);
   line-height: 1;
   letter-spacing: -0.01em;
-  color: var(--ink-soft);
 }
 
 .landing-lede {
@@ -118,31 +156,34 @@ a {
   background: var(--paper-raised);
   border: 1px solid var(--line);
   text-decoration: none;
-  transition: border-color 0.25s;
+  transition:
+    background-color 0.25s,
+    border-color 0.25s;
 }
 
 .choice:hover {
-  border-color: var(--shimmer);
+  background: var(--ink-faint);
+  border-color: var(--ink);
 }
 
 .choice strong {
   display: block;
-  font-weight: 500;
-  font-size: 1.05rem;
-  color: var(--ink-soft);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.15rem;
 }
 
 .choice span {
   display: block;
   margin-top: 0.35rem;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--ink-dim);
 }
 
 .choice .choice-arrow {
   float: right;
   margin: 0;
-  color: var(--shimmer);
+  font-family: var(--meta);
 }
 
 .section-title {
@@ -155,34 +196,37 @@ a {
   justify-content: space-between;
   gap: 0.25rem 1rem;
   padding: 0.95rem 0;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line-faint);
   text-decoration: none;
 }
 
 .trip-name {
-  font-family: var(--serif);
+  font-family: var(--display);
+  font-weight: 500;
   font-size: 1.35rem;
-  color: var(--ink-soft);
-  transition: color 0.2s;
 }
 
-.trip-list a:hover .trip-name {
-  color: var(--shimmer);
+/* The quieter gesture, for text that has no box to ink in. */
+.trip-list a:hover .trip-name,
+.hud-home:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .trip-meta {
   align-self: center;
-  font-size: 0.8rem;
+  font-family: var(--meta);
+  font-size: 0.78rem;
   color: var(--ink-dim);
 }
 
 /* Globe stage */
 
+/* Transparent, so the one grained ground shows through beneath the globe. */
 .stage {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: var(--paper);
 }
 
 .globe,
@@ -205,6 +249,7 @@ a {
 .globe-loading {
   display: grid;
   place-items: center;
+  font-family: var(--meta);
   font-size: 0.72rem;
   letter-spacing: 0.24em;
   text-transform: uppercase;
@@ -253,6 +298,7 @@ a {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font-family: var(--meta);
   font-size: 0.74rem;
   white-space: nowrap;
   color: var(--ink);
@@ -271,29 +317,24 @@ a {
   height: 9px;
   margin-left: -4.5px;
   border-radius: 50%;
-  background: var(--shimmer);
-  box-shadow:
-    0 0 0 3px rgb(255 199 107 / 0.18),
-    0 0 16px 2px rgb(255 199 107 / 0.55);
+  background: var(--ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--paper) 75%, transparent);
   animation: pulse 2.8s ease-in-out infinite;
 }
 
 @keyframes pulse {
   50% {
-    box-shadow:
-      0 0 0 6px rgb(255 199 107 / 0.06),
-      0 0 22px 4px rgb(255 199 107 / 0.35);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--paper) 45%, transparent);
   }
 }
 
+/* A spot is the same ink, drawn hollow rather than in another colour. */
 .pin-spot .pin-dot {
   width: 7px;
   height: 7px;
   margin-left: -3.5px;
-  background: var(--ink-soft);
-  box-shadow:
-    0 0 0 3px rgb(211 227 213 / 0.15),
-    0 0 12px rgb(211 227 213 / 0.5);
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
   animation: none;
 }
 
@@ -302,6 +343,7 @@ a {
   background: var(--paper-glass);
   border: 1px solid var(--line);
   transition:
+    background-color 0.2s,
     border-color 0.2s,
     color 0.2s;
 }
@@ -309,12 +351,6 @@ a {
 .pin-country .pin-label {
   letter-spacing: 0.14em;
   text-transform: uppercase;
-}
-
-.pin:hover .pin-label,
-.pin:focus-visible .pin-label {
-  border-color: var(--shimmer);
-  color: var(--shimmer);
 }
 
 /* HUD */
@@ -338,17 +374,14 @@ a {
 }
 
 .hud-home {
+  font-family: var(--meta);
   font-size: 0.72rem;
   letter-spacing: 0.24em;
   text-transform: uppercase;
   text-decoration: none;
 }
 
-.hud-home:hover {
-  color: var(--shimmer);
-}
-
-/* Unlocked terrain can be bright, so HUD text sits on its own backing. */
+/* An unlocked country wears its tapestry hue, so HUD text sits on its own backing. */
 .hud-home,
 .crumbs ol {
   padding: 0.5rem 0.75rem;
@@ -373,6 +406,7 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  font-family: var(--meta);
   font-size: 0.78rem;
   color: var(--ink-dim);
 }
@@ -406,11 +440,10 @@ a {
 
 .country-summary h1 {
   margin: 0.35rem 0 0.4rem;
-  font-family: var(--serif);
-  font-weight: 400;
+  font-family: var(--display);
+  font-weight: 500;
   font-size: 2.1rem;
   line-height: 1.05;
-  color: var(--ink-soft);
 }
 
 .country-summary ul {
@@ -418,16 +451,17 @@ a {
   flex-direction: column;
   gap: 0.35rem;
   margin-top: 0.8rem;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 
 .country-summary a {
-  color: var(--shimmer);
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
 }
 
 .country-summary a:hover {
-  text-decoration: underline;
+  text-decoration-color: currentColor;
 }
 
 /* Story panel: right-hand column on wide screens, bottom sheet on narrow ones. */
@@ -478,14 +512,14 @@ a {
 
 .story-title {
   margin: 0.5rem 0 0.75rem;
-  font-family: var(--serif);
-  font-weight: 400;
+  font-family: var(--display);
+  font-weight: 500;
   font-size: clamp(2.2rem, 6vw, 3rem);
-  line-height: 1;
-  color: var(--ink-soft);
+  line-height: 1.05;
 }
 
 .story-meta {
+  font-family: var(--meta);
   font-size: 0.78rem;
   color: var(--ink-dim);
 }
@@ -494,22 +528,21 @@ a {
   display: inline-flex;
   margin-top: 1rem;
   padding: 0.35rem 0.65rem;
+  font-family: var(--meta);
   font-size: 0.75rem;
-  color: var(--shimmer);
-  border: 1px dashed var(--shimmer);
+  border: 1px dashed var(--ink);
   text-decoration: none;
 }
 
 .trip-badge:hover {
-  background: rgb(255 199 107 / 0.08);
+  background: var(--ink-faint);
 }
 
 .story-body {
   margin-top: 1.75rem;
-  font-family: var(--serif);
-  font-size: 1.16rem;
+  font-family: var(--body);
+  font-size: 1.08rem;
   line-height: 1.7;
-  color: var(--ink-soft);
 }
 
 .story-body p + p {
@@ -529,20 +562,21 @@ a {
 
 .story-photo figcaption {
   padding: 0.6rem 1.5rem 0;
+  font-family: var(--meta);
   font-size: 0.76rem;
   color: var(--ink-dim);
 }
 
 .story-empty {
   margin-top: 1.75rem;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--ink-dim);
 }
 
 .story-related {
   margin-top: 3rem;
   padding-top: 1.25rem;
-  border-top: 1px dashed var(--line);
+  border-top: 1px dashed var(--line-faint);
 }
 
 .story-related ul {
@@ -568,16 +602,15 @@ a {
 
 .trip-intro h1 {
   margin: 0.5rem 0 0.75rem;
-  font-family: var(--serif);
-  font-weight: 400;
+  font-family: var(--display);
+  font-weight: 500;
   font-size: clamp(2.2rem, 6vw, 3.2rem);
-  line-height: 1;
-  color: var(--ink-soft);
+  line-height: 1.05;
 }
 
 .trip-intro .story-body {
   margin-top: 1.25rem;
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
 .story-bar {
@@ -599,6 +632,7 @@ a {
 .story-bar-text {
   flex: 1;
   min-width: 0;
+  font-family: var(--meta);
 }
 
 .story-bar-text p:nth-child(2) {
@@ -617,11 +651,11 @@ a {
 .story-progress span {
   flex: 1;
   height: 2px;
-  background: var(--line);
+  background: var(--line-faint);
 }
 
 .story-progress span[data-done="true"] {
-  background: var(--shimmer);
+  background: var(--ink);
 }
 
 /* Matches SHEET_BREAKPOINT_PX and SHEET_HEIGHT in the globe engine. */
@@ -692,10 +726,9 @@ a {
 
 .admin h1 {
   margin-bottom: 1.5rem;
-  font-family: var(--serif);
-  font-weight: 400;
+  font-family: var(--display);
+  font-weight: 500;
   font-size: 2.4rem;
-  color: var(--ink-soft);
 }
 
 .admin-header {
@@ -717,7 +750,7 @@ a {
 
 .admin-section {
   padding: 1.75rem 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-faint);
 }
 
 .admin-header + .hint,
@@ -727,6 +760,7 @@ a {
 
 .admin-section h2 {
   margin-bottom: 1.1rem;
+  font-family: var(--meta);
   font-size: 0.78rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -752,6 +786,7 @@ a {
 }
 
 .field > label {
+  font-family: var(--meta);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -761,32 +796,32 @@ a {
 .input {
   width: 100%;
   padding: 0.6rem 0.7rem;
-  font: inherit;
+  font-family: var(--meta);
+  font-size: 0.85rem;
   color: var(--ink);
   background: var(--paper-raised);
   border: 1px solid var(--line);
 }
 
 .input:focus {
-  border-color: var(--shimmer);
-  outline: none;
+  border-color: var(--ink);
 }
 
 textarea.input {
   min-height: 7rem;
-  font-family: var(--serif);
-  font-size: 1.05rem;
-  line-height: 1.5;
+  font-family: var(--body);
+  font-size: 1rem;
+  line-height: 1.6;
   resize: vertical;
 }
 
 .hint {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--ink-dim);
 }
 
 .hint button {
-  color: var(--shimmer);
+  color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -800,6 +835,7 @@ textarea.input {
 
 .segmented label {
   padding: 0.5rem 0.9rem;
+  font-family: var(--meta);
   font-size: 0.8rem;
   cursor: pointer;
 }
@@ -810,24 +846,21 @@ textarea.input {
   pointer-events: none;
 }
 
-.segmented label:has(input:checked) {
-  background: var(--shimmer);
-  color: var(--paper);
-}
-
 .segmented label:has(input:focus-visible) {
-  outline: 1px solid var(--shimmer);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
+/* Errors carry a struck rule and a heavier impression, never a second colour. */
 .form-error {
+  padding-left: 0.6rem;
   font-size: 0.85rem;
-  color: var(--error);
+  font-weight: 700;
+  border-left: 2px solid var(--ink);
 }
 
 .form-ok {
   font-size: 0.85rem;
-  color: var(--shimmer);
 }
 
 .suggestions {
@@ -839,7 +872,7 @@ textarea.input {
   max-height: 16rem;
   overflow-y: auto;
   background: var(--paper-raised);
-  border: 1px solid var(--shimmer);
+  border: 1px solid var(--ink);
 }
 
 .suggestions button {
@@ -848,13 +881,14 @@ textarea.input {
   gap: 1rem;
   width: 100%;
   padding: 0.55rem 0.7rem;
+  font-family: var(--meta);
   font-size: 0.85rem;
   text-align: left;
   cursor: pointer;
 }
 
 .suggestions button:hover {
-  background: var(--line);
+  background: var(--ink-faint);
 }
 
 .suggestions span {
@@ -895,6 +929,7 @@ textarea.input {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.35rem 0.5rem;
+  font-family: var(--meta);
   font-size: 0.68rem;
   color: var(--ink-dim);
 }
@@ -904,53 +939,65 @@ textarea.input {
 }
 
 .photo-item-meta button:hover {
-  color: var(--error);
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .photo-item-meta button:disabled {
   color: var(--ink-dim);
+  text-decoration: none;
   cursor: default;
 }
 
-/* One photo's own progress, so it's clear which of a batch is moving. */
+/*
+ * One photo's own progress, so it's clear which of a batch is moving. The count
+ * sits beside the bar rather than over it: with one ink, a solid fill would
+ * swallow any text laid across it.
+ */
 .photo-progress {
-  position: relative;
-  height: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0 0.5rem 0.35rem;
+}
+
+.photo-progress-track {
+  flex: 1;
+  height: 0.5rem;
   background: var(--paper);
   border: 1px solid var(--line);
 }
 
-.photo-progress span {
+.photo-progress-track span {
   display: block;
   height: 100%;
-  background: var(--shimmer);
+  background: var(--ink);
   transition: width 0.2s linear;
 }
 
-.photo-progress em {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+.photo-progress-count {
+  flex: none;
+  font-family: var(--meta);
   font-size: 0.6rem;
-  font-style: normal;
-  color: var(--ink);
+  color: var(--ink-dim);
 }
 
 .photo-note {
   padding: 0 0.5rem 0.35rem;
+  font-family: var(--meta);
   font-size: 0.65rem;
   line-height: 1.4;
   color: var(--ink-dim);
 }
 
 .photo-note-error {
-  color: var(--error);
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .photo-note-warn {
-  color: var(--shimmer);
+  color: var(--ink);
 }
 
 .admin-list {
@@ -965,11 +1012,11 @@ textarea.input {
   align-items: center;
   gap: 0.5rem 1rem;
   padding: 0.75rem 0;
-  border-bottom: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line-faint);
 }
 
 .admin-list-name {
-  font-family: var(--serif);
+  font-family: var(--display);
   font-size: 1.15rem;
   text-decoration: underline;
   text-decoration-color: var(--line);
@@ -978,7 +1025,6 @@ textarea.input {
 
 .admin-list-name:hover,
 .admin-list-name:focus-visible {
-  color: var(--shimmer);
   text-decoration-color: currentColor;
 }
 
@@ -991,16 +1037,11 @@ textarea.input {
   margin-left: auto;
 }
 
-.btn-danger,
-.btn-danger:hover:not(:disabled) {
-  border-color: var(--error);
-  color: var(--error);
-}
-
 .tree {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  font-family: var(--meta);
   font-size: 0.85rem;
 }
 
@@ -1021,7 +1062,6 @@ textarea.input {
 
 .tree a:hover,
 .tree a:focus-visible {
-  color: var(--shimmer);
   text-decoration-color: currentColor;
 }
 
@@ -1050,6 +1090,7 @@ textarea.input {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  font-family: var(--meta);
   font-size: 0.8rem;
   color: var(--ink-dim);
 }
@@ -1078,6 +1119,7 @@ textarea.input {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
+  font-family: var(--meta);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1089,10 +1131,4 @@ textarea.input {
   color: var(--ink);
   border: 1px solid var(--line);
   cursor: pointer;
-}
-
-.block-split button:hover,
-.block-split button:focus-visible {
-  color: var(--shimmer);
-  border-color: var(--shimmer);
 }

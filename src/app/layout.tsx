@@ -1,9 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Newsreader } from "next/font/google";
+import { Cabin, Courier_Prime, Literata } from "next/font/google";
 import "./globals.css";
 
-const mono = Geist_Mono({ variable: "--font-mono-face", subsets: ["latin"] });
-const serif = Newsreader({ variable: "--font-serif-face", subsets: ["latin"], style: ["normal", "italic"] });
+const display = Cabin({ variable: "--font-display-face", subsets: ["latin"] });
+const body = Literata({ variable: "--font-body-face", subsets: ["latin"], style: ["normal", "italic"] });
+const meta = Courier_Prime({
+  variable: "--font-meta-face",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  style: ["normal", "italic"],
+});
 
 export const metadata: Metadata = {
   title: "Journey",
@@ -13,12 +19,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#090b0a",
+  themeColor: "#f4f1e9",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${mono.variable} ${serif.variable}`}>
+    <html lang="en" className={`${display.variable} ${body.variable} ${meta.variable}`}>
       <body>{children}</body>
     </html>
   );
