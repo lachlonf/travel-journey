@@ -1,4 +1,4 @@
-import { glslVec3, INK, PAPER, SHIMMER } from "./ink";
+import { glslVec3, INK, PAPER } from "./ink";
 
 export const globeVertex = /* glsl */ `
 varying vec2 vUv;
@@ -15,7 +15,10 @@ void main() {
 `;
 
 /**
- * Pass 1: the lit earth in rgb, and how far this pixel's country has unlocked in alpha.
+ * Pass 1: everything the glyph pass needs about this pixel, one value per channel.
+ * The lit earth is reduced to ink density here rather than carried as a colour, so
+ * that the country and its light can travel alongside it and the only colour the
+ * globe ever wears is the tapestry hue the glyph pass looks up.
  * unlockTex holds, per country: r = progress, g = west edge, b = width (texture fractions).
  */
 export const globeFragment = /* glsl */ `
@@ -47,7 +50,17 @@ void main() {
   // the paper, and the globe reads as a pale ring rather than a world.
   float limb = pow(1.0 - facing, 3.0) * 0.55;
 
-  gl_FragColor = vec4(surface + limb, unlock);
+  // r: ink density, which is all the sketch ever needed the earth for.
+  // g: which country, so the glyph pass can find the hue it blooms into.
+  // b: how lit this pixel is, kept clear of the terrain so a bloomed hue stays
+  //    flat and woven while still curving away like a sphere.
+  // a: how far the sweep has passed this pixel.
+  gl_FragColor = vec4(
+    dot(surface, vec3(0.299, 0.587, 0.114)) + limb,
+    country / 255.0,
+    0.55 + 0.45 * facing,
+    unlock
+  );
 }
 `;
 
@@ -63,10 +76,12 @@ void main() {
 /**
  * Pass 2: every screen cell becomes a glyph picked by brightness, unless its
  * country's unlock has passed the cell's random threshold, in which case the
- * real surface shows through. Cells right at the threshold flicker and shimmer.
+ * country's tapestry hue blooms through. Cells right at the front flicker in a
+ * deepened dye of that same hue, so no second colour ever appears.
  */
 export const asciiFragment = /* glsl */ `
 uniform sampler2D scene;
+uniform sampler2D hues;
 uniform sampler2D glyphs;
 uniform float glyphCount;
 uniform vec2 resolution;
@@ -77,10 +92,23 @@ varying vec2 vUv;
 
 const vec3 PAPER = ${glslVec3(PAPER)};
 const vec3 INK = ${glslVec3(INK)};
-const vec3 SHIMMER = ${glslVec3(SHIMMER)};
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+/** The tapestry hue of the country a pixel of pass 1 belongs to. Black where none has been visited. */
+vec3 hueAt(vec4 pixel) {
+  return texture2D(hues, vec2((floor(pixel.g * 255.0 + 0.5) + 0.5) / 256.0, 0.5)).rgb;
+}
+
+/**
+ * The sweep front: the hue steeped darker than it will settle. Dark-on-light is
+ * the only contrast paper has, and taking the front from the country's own hue
+ * keeps the globe down to one colour at a time.
+ */
+vec3 dye(vec3 hue) {
+  return hue * 0.45;
 }
 
 float glyph(float index, vec2 local) {
@@ -95,11 +123,12 @@ void main() {
   vec4 here = texture2D(scene, vUv);
   float threshold = 0.01 + 0.98 * hash(cell);
 
-  // Per pixel, so coastlines cut cleanly through half-revealed cells.
+  // Per pixel, so coastlines cut cleanly through half-bloomed cells.
   if (here.a >= threshold) {
+    vec3 hue = hueAt(here);
     float edge = 1.0 - smoothstep(0.0, 0.12, here.a - threshold);
     float settling = 1.0 - step(0.999, here.a);
-    gl_FragColor = vec4(mix(here.rgb, SHIMMER, edge * settling * 0.8), 1.0);
+    gl_FragColor = vec4(mix(hue * here.b, dye(hue), edge * settling * 0.8), 1.0);
     return;
   }
 
@@ -107,7 +136,7 @@ void main() {
   // gets the faintest glyph: on paper an empty cell is nothing at all, and the
   // oceans would read as holes torn in the sketch rather than as water. Off the
   // globe there is no brightness at all, so the paper around it stays bare.
-  float level = smoothstep(-0.06, 0.62, dot(centre.rgb, vec3(0.299, 0.587, 0.114)));
+  float level = smoothstep(-0.06, 0.62, centre.r);
   float index = floor(level * (glyphCount - 1.0) + 0.5);
   // Ink only ever darkens paper, so the ramp is a wash of ink over the ground
   // with a floor under it: the faintest glyph is still a mark, where scaling the
@@ -117,7 +146,7 @@ void main() {
   float pending = centre.a > 0.0 ? 1.0 - smoothstep(0.0, 0.1, threshold - centre.a) : 0.0;
   if (pending > 0.0) {
     index = 1.0 + floor(hash(cell + floor(time * 18.0)) * (glyphCount - 1.0));
-    ink = mix(ink, SHIMMER, pending);
+    ink = mix(ink, dye(hueAt(centre)), pending);
   }
 
   gl_FragColor = vec4(mix(PAPER, ink, glyph(index, local)), 1.0);

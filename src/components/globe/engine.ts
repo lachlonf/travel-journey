@@ -5,6 +5,7 @@ import type { CountryNode } from "@/lib/journey";
 import { WORLD_ALTITUDE, type CameraTarget, type Pin } from "@/lib/navigation";
 import { buildCountryMask, countryIndexAt, type CountryMask } from "./countryMask";
 import { createGlyphAtlas, GLYPH_RAMP } from "./glyphs";
+import { writeTapestryHues, type HuedCountry } from "./hues";
 import { detectQuality } from "./quality";
 import { asciiFragment, fullscreenVertex, globeFragment, globeVertex } from "./shaders";
 
@@ -71,6 +72,10 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
   const unlockData = new Uint8Array(256 * 4);
   const unlockTexture = new THREE.DataTexture(unlockData, 256, 1);
   unlockTexture.needsUpdate = true;
+  // The hue each country blooms into, which only the glyph pass reads.
+  const hueData = new Uint8Array(256 * 4);
+  const hueTexture = new THREE.DataTexture(hueData, 256, 1);
+  hueTexture.needsUpdate = true;
   const blank = new THREE.DataTexture(new Uint8Array(4), 1, 1);
   blank.needsUpdate = true;
 
@@ -86,7 +91,12 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
   const globe = new THREE.Mesh(new THREE.SphereGeometry(1, quality.segments, quality.segments / 2), globeMaterial);
   const scene = new THREE.Scene();
   scene.add(globe);
-  const sceneTarget = new THREE.WebGLRenderTarget(1, 1);
+  // Nearest, because pass 1's channels are facts about a pixel rather than a picture:
+  // blending them across a border would hand the glyph pass a country that isn't there.
+  const sceneTarget = new THREE.WebGLRenderTarget(1, 1, {
+    magFilter: THREE.NearestFilter,
+    minFilter: THREE.NearestFilter,
+  });
 
   // Pass 2 draws that image as glyphs, except where a country has unlocked.
   const glyphs = createGlyphAtlas();
@@ -97,6 +107,7 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
     depthWrite: false,
     uniforms: {
       scene: { value: sceneTarget.texture },
+      hues: { value: hueTexture },
       glyphs: { value: glyphs },
       glyphCount: { value: GLYPH_RAMP.length },
       resolution: { value: new THREE.Vector2(1, 1) },
@@ -161,6 +172,7 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
     if (!mask) return;
     const seen = readSeen();
     const wanted = new Set<number>();
+    const hued: HuedCountry[] = [];
     let firstNew: UnlockableCountry | undefined;
     let queued = 0;
 
@@ -169,6 +181,7 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
       const index = country.numericId ? mask.indexByNumericId.get(country.numericId) : undefined;
       if (!index) continue;
       wanted.add(index);
+      hued.push({ code: country.code, index });
       if (unlockData[index * 4] === 255 || unlocking.has(index)) continue;
 
       if (seen.has(country.code) || reducedMotion) {
@@ -185,6 +198,8 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
       }
     }
     unlockTexture.needsUpdate = true;
+    writeTapestryHues(hueData, hued);
+    hueTexture.needsUpdate = true;
 
     // Turn the globe to face a new unlock, if the viewer is still just looking at the world.
     if (firstNew && !flight && altitude === WORLD_ALTITUDE && controls.autoRotate) {
@@ -363,7 +378,8 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
       cancelAnimationFrame(frameId);
       observer.disconnect();
       controls.dispose();
-      for (const resource of [globe.geometry, globeMaterial, quad.geometry, asciiMaterial, sceneTarget, unlockTexture, blank, glyphs]) {
+      const resources = [globe.geometry, globeMaterial, quad.geometry, asciiMaterial, sceneTarget, unlockTexture, hueTexture, blank, glyphs];
+      for (const resource of resources) {
         resource.dispose();
       }
       earthTexture?.dispose();

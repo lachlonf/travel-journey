@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { asciiFragment } from "./shaders";
-import { channels, glslVec3, INK, PAPER, SHIMMER, type Hex } from "./ink";
+import { channels, glslVec3, INK, PAPER, type Hex } from "./ink";
 
 const stylesheet = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
 
@@ -29,10 +29,6 @@ describe("the globe's paper and ink", () => {
   it("is ink on paper and not the other way round", () => {
     expect(brightness(INK)).toBeLessThan(brightness(PAPER));
   });
-
-  it("sweeps a front darker than the ink it passes over, the only contrast paper has", () => {
-    expect(brightness(SHIMMER)).toBeLessThan(brightness(INK));
-  });
 });
 
 describe("glslVec3", () => {
@@ -48,9 +44,13 @@ describe("the glyph pass", () => {
     for (const [name, colour] of [
       ["PAPER", PAPER],
       ["INK", INK],
-      ["SHIMMER", SHIMMER],
     ] as const) {
       expect(asciiFragment).toContain(`const vec3 ${name} = ${glslVec3(colour)};`);
     }
+  });
+
+  it("holds no colour beyond the paper and the one ink, so tapestry hue is the only colour on the globe", () => {
+    const declared = [...asciiFragment.matchAll(/const vec3 (\w+)/g)].map(([, name]) => name);
+    expect(declared).toEqual(["PAPER", "INK"]);
   });
 });
