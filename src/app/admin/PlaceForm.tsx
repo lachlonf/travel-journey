@@ -148,16 +148,16 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
     setBusy(true);
     setStatus({});
     setExistingCity(null);
-    const spot = { lat: Number(lat), lng: Number(lng) };
+    const coords = { lat: Number(lat), lng: Number(lng) };
     const input: PlaceInput = {
       kind,
       name,
-      ...spot,
+      ...coords,
       countryCode,
       tripId: tripId || null,
       visitedOn: visitedOn || null,
       story,
-      parent: kind === "poi" ? parentInput(parent, spot) : null,
+      parent: kind === "spot" ? parentInput(parent, coords) : null,
     };
 
     try {
@@ -181,7 +181,7 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
     <form className="form" onSubmit={submit}>
       <fieldset className="segmented">
         <legend className="sr-only">Kind of place</legend>
-        {(["city", "poi"] as const).map((k) => (
+        {(["city", "spot"] as const).map((k) => (
           <label key={k}>
             <input type="radio" name="kind" value={k} checked={kind === k} onChange={() => setKind(k)} />
             {k === "city" ? "City" : "Specific spot"}
@@ -214,7 +214,7 @@ export function PlaceForm({ trips }: { trips: Trip[] }) {
 
       <CoordinateFields idPrefix="place" lat={lat} lng={lng} countryCode={countryCode} onCoords={setCoords} onCountryCode={setCountryCode} />
 
-      {kind === "poi" && (
+      {kind === "spot" && (
         <ParentCityField
           id="place-parent"
           parent={parent}

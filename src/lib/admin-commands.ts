@@ -240,7 +240,7 @@ export function createAdminCommands(repository: JourneyRepository) {
       const countryCode = text(input.countryCode).toUpperCase();
       const tripId = input.tripId || null;
 
-      if (input.kind !== "city" && input.kind !== "poi") return fail({ code: "invalid-kind", message: "Choose city or specific spot." });
+      if (input.kind !== "city" && input.kind !== "spot") return fail({ code: "invalid-kind", message: "Choose city or specific spot." });
       const invalid = placeDetailsError(data, { name, lat: input.lat, lng: input.lng, countryCode, tripId });
       if (invalid) return fail(invalid);
       if (input.visitedOn && !ISO_DATE.test(input.visitedOn)) return fail({ code: "invalid-date", message: "Visit date must be YYYY-MM-DD." });
@@ -255,7 +255,7 @@ export function createAdminCommands(repository: JourneyRepository) {
       }
 
       let parentId: string | null = null;
-      if (input.kind === "poi") {
+      if (input.kind === "spot") {
         const parent = validParent(input.parent);
         if (!parent) return fail({ code: "parent-city-required", message: "A specific spot needs a city to fold into." });
         parentId = await parentCityId(data.places, parent, countryCode);

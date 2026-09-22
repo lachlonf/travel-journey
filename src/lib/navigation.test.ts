@@ -16,7 +16,7 @@ describe("navigate", () => {
     expect(inCity).toEqual({ nav: { level: "city", country: "PE", cityId: "huaraz" }, openPlaceId: null });
   });
 
-  it("opens a city's story straight away when it has no POIs to pick from", () => {
+  it("opens a city's story straight away when it has no spots to pick from", () => {
     expect(go(initialView, { type: "openCity", cityId: "cusco" })).toEqual({
       nav: { level: "city", country: "PE", cityId: "cusco" },
       openPlaceId: "cusco",
@@ -59,15 +59,15 @@ describe("visiblePins", () => {
     ]);
   });
 
-  it("shows cities at country level, with POIs absorbed", () => {
+  it("shows cities at country level, with spots absorbed", () => {
     const ids = visiblePins(journey, { level: "country", country: "PE" }).map((p) => p.id);
     expect(ids.sort()).toEqual(["cusco", "huaraz", "orphan"]);
   });
 
-  it("shows the city and its POIs at city level", () => {
+  it("shows the city and its spots at city level", () => {
     expect(visiblePins(journey, { level: "city", country: "PE", cityId: "huaraz" }).map((p) => [p.kind, p.id])).toEqual([
       ["city", "huaraz"],
-      ["poi", "laguna513"],
+      ["spot", "laguna513"],
     ]);
   });
 });

@@ -72,7 +72,7 @@ describe("addPlace", () => {
     const trip = unwrap(await commands().createTrip({ name: "South America 2025", story: "", startDate: "2025-06-01", endDate: "2025-07-10" }));
     const result = await commands().addPlace(
       city({
-        kind: "poi",
+        kind: "spot",
         name: "Laguna 513",
         lat: -9.2112,
         lng: -77.5466,
@@ -84,7 +84,7 @@ describe("addPlace", () => {
 
     expect(result.ok).toBe(true);
     const peru = (await journey()).countryByCode.get("PE")!;
-    expect(peru.cities.map((c) => [c.place.name, c.pois.map((p) => p.name)])).toEqual([["Huaraz", ["Laguna 513"]]]);
+    expect(peru.cities.map((c) => [c.place.name, c.spots.map((p) => p.name)])).toEqual([["Huaraz", ["Laguna 513"]]]);
     expect(peru.cities[0].place.visitedOn).toEqual([]);
     expect(tripStops(await journey(), trip.id).map((p) => p.name)).toEqual(["Laguna 513"]);
   });
@@ -133,7 +133,7 @@ describe("updatePlace", () => {
   });
 
   const carhuaz = { name: "Carhuaz", lat: -9.28194, lng: -77.64472 };
-  const laguna513 = () => city({ kind: "poi", name: "Laguna 513", lat: -9.2112, lng: -77.5466, parent: carhuaz });
+  const laguna513 = () => city({ kind: "spot", name: "Laguna 513", lat: -9.2112, lng: -77.5466, parent: carhuaz });
   const spotUpdate = (spot: Place, input: Partial<PlaceUpdate>): PlaceUpdate => ({
     id: spot.id,
     name: spot.name,
@@ -153,7 +153,7 @@ describe("updatePlace", () => {
 
     expect(result.ok).toBe(true);
     const peru = (await journey()).countryByCode.get("PE")!;
-    expect(peru.cities.map((c) => [c.place.name, c.pois.map((p) => p.name)])).toEqual([
+    expect(peru.cities.map((c) => [c.place.name, c.spots.map((p) => p.name)])).toEqual([
       ["Huaraz", ["Laguna 513"]],
       ["Carhuaz", []],
     ]);
@@ -169,7 +169,7 @@ describe("updatePlace", () => {
     const after = await journey();
     const yungay = after.cityOf.get(spot.id)!.place;
     expect([yungay.name, yungay.countryCode, yungay.tripId, yungay.visitedOn]).toEqual(["Yungay", "PE", null, []]);
-    expect(after.countryByCode.get("PE")!.cities.map((c) => [c.place.name, c.pois.map((p) => p.name)])).toEqual([
+    expect(after.countryByCode.get("PE")!.cities.map((c) => [c.place.name, c.spots.map((p) => p.name)])).toEqual([
       ["Carhuaz", []],
       ["Yungay", ["Laguna 513"]],
     ]);
@@ -203,7 +203,7 @@ describe("updatePlace", () => {
 
     expect(result.ok).toBe(false);
     const peru = (await journey()).countryByCode.get("PE")!;
-    expect(peru.cities.map((c) => [c.place.name, c.pois.map((p) => [p.name, p.lat])])).toEqual([["Carhuaz", [["Laguna 513", -9.2112]]]]);
+    expect(peru.cities.map((c) => [c.place.name, c.spots.map((p) => [p.name, p.lat])])).toEqual([["Carhuaz", [["Laguna 513", -9.2112]]]]);
   });
 });
 
@@ -404,7 +404,7 @@ describe("validation", () => {
     ["a place with a country name for a code", () => commands().addPlace(city({ countryCode: "Peru" })), "invalid-country"],
     ["a place with a malformed visit date", () => commands().addPlace(city({ visitedOn: "5 June" })), "invalid-date"],
     ["a place on a trip that doesn't exist", () => commands().addPlace(city({ tripId: "nope" })), "unknown-trip"],
-    ["a spot without a city", () => commands().addPlace(city({ kind: "poi", parent: null })), "parent-city-required"],
+    ["a spot without a city", () => commands().addPlace(city({ kind: "spot", parent: null })), "parent-city-required"],
     ["an update sent as nothing at all", () => commands().updatePlace(null as never), "unknown-place"],
     ["an update to a place that doesn't exist", () => update({ id: "nope" }), "unknown-place"],
     ["renaming a place to nothing", () => update({ name: "  " }), "name-required"],
@@ -413,7 +413,7 @@ describe("validation", () => {
     ["moving a place onto a trip that doesn't exist", () => update({ tripId: "nope" }), "unknown-trip"],
     [
       "taking a spot out of every city",
-      () => update({ parent: { name: "", lat: 0, lng: 0 } }, { kind: "poi", parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 } }),
+      () => update({ parent: { name: "", lat: 0, lng: 0 } }, { kind: "spot", parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 } }),
       "parent-city-required",
     ],
     [
@@ -703,7 +703,7 @@ describe("deletePlace", () => {
   const cityWithSpot = async () => {
     const huaraz = unwrap(await commands().addPlace(city()));
     const spot = unwrap(
-      await commands().addPlace(city({ kind: "poi", name: "Laguna 513", lat: -9.2112, lng: -77.5466, parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 } })),
+      await commands().addPlace(city({ kind: "spot", name: "Laguna 513", lat: -9.2112, lng: -77.5466, parent: { name: "Huaraz", lat: -9.52614, lng: -77.52869 } })),
     );
     return { huaraz, spot };
   };
@@ -715,7 +715,7 @@ describe("deletePlace", () => {
 
     expect(result.ok ? null : result.error.code).toBe("city-still-has-spots");
     const peru = (await journey()).countryByCode.get("PE")!;
-    expect(peru.cities.map((c) => [c.place.name, c.pois.map((p) => p.name)])).toEqual([["Huaraz", ["Laguna 513"]]]);
+    expect(peru.cities.map((c) => [c.place.name, c.spots.map((p) => p.name)])).toEqual([["Huaraz", ["Laguna 513"]]]);
     expect((await journey()).placeById.get(spot.id)).toBeDefined();
   });
 
@@ -770,7 +770,7 @@ describe("deletePlace", () => {
     const after = await journey();
     expect(after.data.photos.map((p) => p.id)).toEqual([kept.id]);
     expect(existsSync(join(dir, "uploads", basename(kept.url)))).toBe(true);
-    expect(after.countryByCode.get("PE")!.cities.map((c) => [c.place.name, c.pois.map((p) => p.name)])).toEqual([["Huaraz", []]]);
+    expect(after.countryByCode.get("PE")!.cities.map((c) => [c.place.name, c.spots.map((p) => p.name)])).toEqual([["Huaraz", []]]);
   });
 
   it("keeps a deleted place's trip and its other stops", async () => {

@@ -12,10 +12,10 @@ describe("buildJourney", () => {
     expect(country("PE").numericId).toBe("604");
   });
 
-  it("groups POIs under their parent city, promoting orphans to cities", () => {
+  it("groups spots under their parent city, promoting orphans to cities", () => {
     const cities = country("PE").cities;
     expect(cities.map((c) => c.place.id).sort()).toEqual(["cusco", "huaraz", "orphan"]);
-    expect(cities.find((c) => c.place.id === "huaraz")!.pois.map((p) => p.id)).toEqual(["laguna513"]);
+    expect(cities.find((c) => c.place.id === "huaraz")!.spots.map((p) => p.id)).toEqual(["laguna513"]);
   });
 
   it("derives each country's visited date range, ignoring undated places", () => {

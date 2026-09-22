@@ -20,7 +20,7 @@ export default async function EditPlacePage({ params }: { params: Promise<{ id: 
 
   // A spot whose city is missing is its own city node; it then has no parent to show.
   const city = journey.cityOf.get(place.id)!.place;
-  const parentCity = place.kind === "poi" && city.id !== place.id ? city : null;
+  const parentCity = place.kind === "spot" && city.id !== place.id ? city : null;
   const where = [parentCity?.name, countryName(place.countryCode)].filter(Boolean).join(", ");
 
   // The arranger starts from the story visitors read, so a photo no block mentions is in it, at the end.

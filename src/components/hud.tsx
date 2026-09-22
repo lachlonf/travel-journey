@@ -28,7 +28,7 @@ export function Breadcrumbs({ journey, nav, onBack }: { journey: Journey; nav: N
 
 /** The light country-level summary: name, when, how much, and the trips that passed through. */
 export function CountrySummary({ journey, country }: { journey: Journey; country: CountryNode }) {
-  const placeCount = country.cities.reduce((n, city) => n + 1 + city.pois.length, 0);
+  const placeCount = country.cities.reduce((n, city) => n + 1 + city.spots.length, 0);
   const dates = country.dateRange && formatRange(country.dateRange.from, country.dateRange.to);
   const trips = country.tripIds.flatMap((id) => journey.tripById.get(id) ?? []);
 

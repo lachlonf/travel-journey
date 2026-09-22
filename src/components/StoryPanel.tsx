@@ -21,8 +21,8 @@ export function StoryPanel({ journey, placeId, showTripLink = false, onClose, on
   const trip = place.tripId ? journey.tripById.get(place.tripId) : undefined;
   // Blank text blocks would only leave a gap.
   const story = (journey.storyByPlace.get(place.id) ?? []).filter((block) => block.type === "photo" || paragraphs(block.text).length > 0);
-  const nearby = place.kind === "city" ? city.pois : [city.place, ...city.pois.filter((p) => p.id !== place.id)];
-  const where = [place.kind === "poi" ? city.place.name : null, country?.name].filter(Boolean).join(", ");
+  const nearby = place.kind === "city" ? city.spots : [city.place, ...city.spots.filter((p) => p.id !== place.id)];
+  const where = [place.kind === "spot" ? city.place.name : null, country?.name].filter(Boolean).join(", ");
 
   return (
     <article className="story-panel" aria-labelledby="story-title">

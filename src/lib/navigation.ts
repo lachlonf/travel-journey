@@ -22,7 +22,7 @@ export type NavAction =
 
 export interface Pin {
   id: string;
-  kind: "country" | "city" | "poi";
+  kind: "country" | "city" | "spot";
   label: string;
   lat: number;
   lng: number;
@@ -53,7 +53,7 @@ export function navigate(journey: Journey, view: View, action: NavAction): View 
       const node = journey.cityOf.get(action.cityId);
       if (node?.place.id !== action.cityId) return view;
       // Nothing to choose between, so go straight to the story.
-      return { nav: cityNav(node), openPlaceId: node.pois.length ? null : node.place.id };
+      return { nav: cityNav(node), openPlaceId: node.spots.length ? null : node.place.id };
     }
     case "openPlace": {
       const node = journey.cityOf.get(action.placeId);
@@ -79,7 +79,7 @@ export function visiblePins(journey: Journey, nav: Nav): Pin[] {
     return (journey.countryByCode.get(nav.country)?.cities ?? []).map((node) => placePin(node.place, "city"));
   }
   const node = journey.cityOf.get(nav.cityId);
-  return node ? [placePin(node.place, "city"), ...node.pois.map((p) => placePin(p, "poi"))] : [];
+  return node ? [placePin(node.place, "city"), ...node.spots.map((p) => placePin(p, "spot"))] : [];
 }
 
 export function cameraTarget(journey: Journey, nav: Nav): CameraTarget {
@@ -92,7 +92,7 @@ export function cameraTarget(journey: Journey, nav: Nav): CameraTarget {
   if (nav.level === "city") {
     const node = journey.cityOf.get(nav.cityId);
     if (node) {
-      const places = [node.place, ...node.pois];
+      const places = [node.place, ...node.spots];
       const center = centroid(places);
       return { ...center, altitude: clamp(spreadKm(center, places) / KM_PER_ALTITUDE, 0.02, 0.25) };
     }

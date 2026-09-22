@@ -1,4 +1,4 @@
-export type PlaceKind = "city" | "poi";
+export type PlaceKind = "city" | "spot";
 
 /** An optional story that strings places together, possibly across countries. */
 export interface Trip {
@@ -13,7 +13,7 @@ export interface Trip {
 export type StoryBlock = { type: "text"; text: string } | { type: "photo"; photoId: string };
 
 /**
- * A checkpoint on the globe. Cities are level-2 pins; POIs are level-3 pins
+ * A checkpoint on the globe. Cities are level-2 pins; spots are level-3 pins
  * that get absorbed into their parent city when zoomed out.
  */
 export interface Place {
@@ -24,7 +24,7 @@ export interface Place {
   lng: number;
   /** ISO 3166-1 alpha-2, e.g. "PE". */
   countryCode: string;
-  /** For POIs: the city they collapse into. Always null for cities. */
+  /** For spots: the city they collapse into. Always null for cities. */
   parentId: string | null;
   tripId: string | null;
   /** ISO dates (YYYY-MM-DD). A list, because you can go back. */

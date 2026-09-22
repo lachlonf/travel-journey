@@ -18,7 +18,7 @@ export default async function AdminPage() {
   const placeOptions = journey.countries.flatMap((country) =>
     country.cities.flatMap((city) => [
       { id: city.place.id, label: `${country.name} · ${city.place.name}` },
-      ...city.pois.map((poi) => ({ id: poi.id, label: `${country.name} · ${city.place.name} · ${poi.name}` })),
+      ...city.spots.map((spot) => ({ id: spot.id, label: `${country.name} · ${city.place.name} · ${spot.name}` })),
     ]),
   );
 
@@ -87,11 +87,11 @@ export default async function AdminPage() {
                       <li key={city.place.id}>
                         <Link href={`/admin/places/${city.place.id}`}>{city.place.name}</Link>{" "}
                         <span className="muted">· {photoCount(city.place.id)}</span>
-                        {city.pois.length > 0 && (
+                        {city.spots.length > 0 && (
                           <ul>
-                            {city.pois.map((poi) => (
-                              <li key={poi.id}>
-                                <Link href={`/admin/places/${poi.id}`}>{poi.name}</Link> <span className="muted">· {photoCount(poi.id)}</span>
+                            {city.spots.map((spot) => (
+                              <li key={spot.id}>
+                                <Link href={`/admin/places/${spot.id}`}>{spot.name}</Link> <span className="muted">· {photoCount(spot.id)}</span>
                               </li>
                             ))}
                           </ul>

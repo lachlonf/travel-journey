@@ -9,7 +9,7 @@ export const countryName = (code: string) => countries.getName(code, "en") ?? co
 
 export interface CityNode {
   place: Place;
-  pois: Place[];
+  spots: Place[];
 }
 
 export interface CountryNode {
@@ -28,13 +28,13 @@ export interface CountryNode {
 /** A story block as visitors read it: photo blocks carry the photo itself. */
 export type ResolvedStoryBlock = Extract<StoryBlock, { type: "text" }> | { type: "photo"; photo: Photo };
 
-/** The read-side shape of the journey: countries → cities → POIs, plus lookups. */
+/** The read-side shape of the journey: countries → cities → spots, plus lookups. */
 export interface Journey {
   data: JourneyData;
   countries: CountryNode[];
   countryByCode: Map<string, CountryNode>;
   placeById: Map<string, Place>;
-  /** Every place id (city or POI) → the city node it lives under. */
+  /** Every place id (city or spot) → the city node it lives under. */
   cityOf: Map<string, CityNode>;
   /** Each place's resolved story, the only thing the story panel renders. */
   storyByPlace: Map<string, ResolvedStoryBlock[]>;
@@ -66,14 +66,14 @@ function resolveStory(place: Place, photos: readonly Photo[]): ResolvedStoryBloc
 
 export function buildJourney(data: JourneyData): Journey {
   const placeById = new Map(data.places.map((p) => [p.id, p]));
-  const hasParentCity = (p: Place) => p.kind === "poi" && p.parentId !== null && placeById.get(p.parentId)?.kind === "city";
+  const hasParentCity = (p: Place) => p.kind === "spot" && p.parentId !== null && placeById.get(p.parentId)?.kind === "city";
 
   const cityOf = new Map<string, CityNode>();
-  for (const p of data.places) if (!hasParentCity(p)) cityOf.set(p.id, { place: p, pois: [] });
+  for (const p of data.places) if (!hasParentCity(p)) cityOf.set(p.id, { place: p, spots: [] });
   for (const p of data.places) {
     if (!hasParentCity(p)) continue;
     const city = cityOf.get(p.parentId!)!;
-    city.pois.push(p);
+    city.spots.push(p);
     cityOf.set(p.id, city);
   }
 
@@ -85,7 +85,7 @@ export function buildJourney(data: JourneyData): Journey {
 
   const tripOrder = data.trips.map((t) => t.id);
   const countryNodes = [...citiesByCountry].map(([code, cities]): CountryNode => {
-    const places = cities.flatMap((c) => [c.place, ...c.pois]);
+    const places = cities.flatMap((c) => [c.place, ...c.spots]);
     const dates = places.flatMap((p) => p.visitedOn).sort();
     const center = centroid(places);
     const numeric = countries.alpha2ToNumeric(code);

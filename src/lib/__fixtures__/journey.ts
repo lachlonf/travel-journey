@@ -32,7 +32,7 @@ export const fixture: JourneyData = {
     }),
     place({
       id: "laguna513",
-      kind: "poi",
+      kind: "spot",
       name: "Laguna 513",
       lat: -9.2112,
       lng: -77.5466,
@@ -43,7 +43,7 @@ export const fixture: JourneyData = {
     }),
     place({ id: "lapaz", name: "La Paz", lat: -16.5, lng: -68.15, countryCode: "BO", tripId: "t-sa", visitedOn: ["2025-07-02"] }),
     place({ id: "sydney", name: "Sydney", lat: -33.8688, lng: 151.2093, countryCode: "AU", visitedOn: ["2019-12-24", "2023-01-02"] }),
-    place({ id: "orphan", kind: "poi", name: "Lost spot", lat: -10, lng: -76, countryCode: "PE", parentId: "missing" }),
+    place({ id: "orphan", kind: "spot", name: "Lost spot", lat: -10, lng: -76, countryCode: "PE", parentId: "missing" }),
   ],
   photos: [
     // p1 is in no block, so it's appended to Huaraz's story.

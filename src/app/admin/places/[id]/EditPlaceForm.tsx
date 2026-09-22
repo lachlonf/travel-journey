@@ -18,7 +18,7 @@ interface EditPlaceFormProps {
 
 export function EditPlaceForm({ place, parentCity, trips }: EditPlaceFormProps) {
   const router = useRouter();
-  const isSpot = place.kind === "poi";
+  const isSpot = place.kind === "spot";
   const [name, setName] = useState(place.name);
   const [lat, setLat] = useState(String(place.lat));
   const [lng, setLng] = useState(String(place.lng));
