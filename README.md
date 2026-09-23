@@ -69,6 +69,19 @@ An object is collected only when no `photos.storage_path` row points at it *and*
 
 Run it yourself, when you mean to. Nothing schedules it.
 
+## Check the globe by hand
+
+The globe shader has no unit tests, because asserting on WebGL output would only prove the harness. Run through this in a browser whenever the engine, the shaders or the palette change. The sample data holds one country, so add a few places in the admin first: two neighbours and somewhere the palette has no entry for. Last run in full on 23 September 2026:
+
+- [ ] The resting world is ink on paper and nothing else. Drill in from the world to a country to one of its cities and back out again: land nobody has visited is glyphs in the one ink at all three altitudes, with no second colour anywhere, and only the glyphs' spacing against the land changes. An unlocked country is the exception, and reads as flat hue rather than glyphs once you are inside it.
+- [ ] A country unlocks into its hue. Clear `journey:seen-countries` from localStorage, reload, and watch a visited country's glyphs dissolve into its tapestry hue. It plays once: reload again and that country is already coloured, with no second dissolve.
+- [ ] The front runs west to east, once per country. The bloom crosses each country glyph by glyph, behind a front in that country's dye — never a colour the country doesn't wear. With several countries unlocked at once they start in turn rather than together.
+- [ ] Two adjacent visited countries stay two countries. Give two neighbours places, unlock both, and look at where they meet: a seam in the dye of whichever country it stitches. Give them the same hue by hand in `src/lib/tapestry.ts`, and the seam is still what tells them apart; put it back afterwards.
+- [ ] A country with no curated hue wears the fallback. Add a place in a country absent from `TAPESTRY_HUES` (Norway, say): it unlocks like any other, in undyed alpaca, and nothing errors.
+- [ ] The low-power path renders the same world. Open on a phone, or in devtools with touch emulation on, and compare against desktop: coarser glyphs and a softer sphere, but the same countries unlocked and the same hues. A phone must never show fewer unlocked countries than desktop.
+- [ ] Reduced motion is still the whole journey. With the OS set to reduce motion, the globe doesn't spin on its own, camera moves land instantly, and visited countries are simply already coloured — no dissolve, and nothing missing that motion would have shown.
+- [ ] The globe at 400px wide is legible. Narrow it with device emulation or a phone, because a Chrome window stops at 500px: the glyphs stay readable rather than turning to noise, pins and labels don't pile up, and drilling into a city still frames it above the bottom sheet.
+
 ## Deploy
 
 Import the repo into Vercel and set `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Search engines are told not to index the site, so share the link directly.
