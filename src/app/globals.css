@@ -190,9 +190,12 @@ a {
     border-color 0.25s;
 }
 
-.choice:hover {
-  background: var(--ink-faint);
-  border-color: var(--ink);
+/* A tap is not a hover: on a touch screen the ink would stay pressed on the last choice touched. */
+@media (hover: hover) {
+  .choice:hover {
+    background: var(--ink-faint);
+    border-color: var(--ink);
+  }
 }
 
 .choice strong {
