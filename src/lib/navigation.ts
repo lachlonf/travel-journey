@@ -15,6 +15,11 @@ export interface View {
   nav: Nav;
   /** The place whose story panel is open, if any. */
   openPlaceId: string | null;
+  /**
+   * Whether that story has taken over the screen as a full page. The panel is
+   * the preview; reading is where the writing and the photographs get room.
+   */
+  reading: boolean;
   overlay: Overlay;
 }
 
@@ -22,6 +27,7 @@ export type NavAction =
   | { type: "openCountry"; country: string }
   | { type: "openCity"; cityId: string }
   | { type: "openPlace"; placeId: string }
+  | { type: "readStory" }
   | { type: "openTrips" }
   | { type: "landing" }
   | { type: "explore" }
@@ -43,7 +49,7 @@ export interface CameraTarget {
 }
 
 /** The globe with nothing over it: what the Explore choice leads to. */
-export const exploringView: View = { nav: { level: "world" }, openPlaceId: null, overlay: null };
+export const exploringView: View = { nav: { level: "world" }, openPlaceId: null, reading: false, overlay: null };
 
 /** The site opens on the landing, which is the same world with a title over it. */
 export const initialView: View = { ...exploringView, overlay: "landing" };
@@ -58,18 +64,21 @@ export function navigate(journey: Journey, view: View, action: NavAction): View 
   switch (action.type) {
     case "openCountry":
       return journey.countryByCode.has(action.country)
-        ? { nav: { level: "country", country: action.country }, openPlaceId: null, overlay: null }
+        ? { ...exploringView, nav: { level: "country", country: action.country } }
         : view;
     case "openCity": {
       const node = journey.cityOf.get(action.cityId);
       if (node?.place.id !== action.cityId) return view;
       // Nothing to choose between, so go straight to the story.
-      return { nav: cityNav(node), openPlaceId: node.spots.length ? null : node.place.id, overlay: null };
+      return { ...exploringView, nav: cityNav(node), openPlaceId: node.spots.length ? null : node.place.id };
     }
     case "openPlace": {
       const node = journey.cityOf.get(action.placeId);
-      return node ? { nav: cityNav(node), openPlaceId: action.placeId, overlay: null } : view;
+      // Reading carries over, so a nearby place opened from the full page stays a full page.
+      return node ? { ...exploringView, nav: cityNav(node), openPlaceId: action.placeId, reading: view.reading } : view;
     }
+    case "readStory":
+      return view.openPlaceId && !view.reading ? { ...view, reading: true } : view;
     // An overlay always rests on the world, never over a country you had drilled into.
     case "landing":
       return initialView;
@@ -79,10 +88,11 @@ export function navigate(journey: Journey, view: View, action: NavAction): View 
       return view.overlay === null ? view : { ...view, overlay: null };
     case "back": {
       const { nav } = view;
-      // Outwards one layer at a time: the trips panel, the story, the globe, the landing.
+      // Outwards one layer at a time: the trips panel, the full page, the preview, the globe, the landing.
       if (view.overlay === "trips") return { ...view, overlay: "landing" };
+      if (view.reading) return { ...view, reading: false };
       if (view.openPlaceId) return { ...view, openPlaceId: null };
-      if (nav.level === "city") return { nav: { level: "country", country: nav.country }, openPlaceId: null, overlay: null };
+      if (nav.level === "city") return { ...exploringView, nav: { level: "country", country: nav.country } };
       if (nav.level === "country") return exploringView;
       return view;
     }

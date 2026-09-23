@@ -257,6 +257,8 @@ a {
   overflow: hidden;
 }
 
+/* The world's own layer, which reading makes inert without unmounting it. */
+.globe-shell,
 .globe,
 .globe-canvas,
 .globe-loading {
@@ -615,6 +617,93 @@ a {
   margin-top: 0.7rem;
 }
 
+/* The way out of the preview, offered before the story rather than after it. */
+.story-read {
+  margin-top: 1.5rem;
+}
+
+/*
+ * Reading: the story takes over the screen as a page. The writing keeps a
+ * measured column — a line you can read without losing your place — while a
+ * print is free to rest wider than the text it sits among.
+ */
+.story-page {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background-color: var(--paper);
+  background-image: var(--grain);
+  animation: page-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Reading opens with the page itself focused, which is a place to read, not a control. */
+.story-page:focus-visible {
+  outline: none;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+}
+
+.story-page-top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem var(--gutter);
+  background: linear-gradient(var(--paper) 70%, transparent);
+}
+
+.story-page-inner {
+  display: grid;
+  grid-template-columns:
+    minmax(var(--gutter), 1fr)
+    [text-start] minmax(0, 38rem) [text-end]
+    minmax(var(--gutter), 1fr);
+  padding-bottom: 8rem;
+}
+
+.story-page-inner > * {
+  grid-column: text;
+}
+
+.story-page-head {
+  margin: 1.5rem 0 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line-faint);
+}
+
+.story-page-title {
+  margin: 0.5rem 0 0.75rem;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(2.6rem, 8vw, 4.5rem);
+  line-height: 1;
+}
+
+.story-page .story-body {
+  font-size: 1.15rem;
+}
+
+/* A print rests on the page, not inside the column of text. */
+.story-page .story-photo {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: min(54rem, calc(100% - 2 * var(--gutter)));
+  margin: 3rem 0;
+}
+
+.story-page .story-photo figcaption {
+  padding-inline: 0;
+}
+
 /* Story mode */
 
 .trip-intro {
@@ -743,6 +832,7 @@ a {
   .pin-dot,
   .globe-loading,
   .story-panel,
+  .story-page,
   .trips-panel {
     animation: none;
   }

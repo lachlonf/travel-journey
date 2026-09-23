@@ -8,6 +8,7 @@ import type { JourneyData } from "@/lib/types";
 import { LazyGlobe } from "./globe/LazyGlobe";
 import { Breadcrumbs, CountrySummary } from "./hud";
 import { Landing } from "./Landing";
+import { StoryPage } from "./StoryPage";
 import { StoryPanel } from "./StoryPanel";
 import { TripsPanel } from "./TripsPanel";
 
@@ -41,24 +42,22 @@ export function ExploreApp({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [back]);
 
-  const { nav, openPlaceId, overlay } = view;
+  const { nav, openPlaceId, overlay, reading } = view;
   const country = nav.level === "country" ? journey.countryByCode.get(nav.country) : undefined;
 
   return (
     <main className="stage">
-      <LazyGlobe
-        journey={journey}
-        nav={nav}
-        panelOpen={openPlaceId !== null || overlay === "trips"}
-        onNavigate={dispatch}
-      />
+      {/* Inert while reading: the world is still there, but it is behind a page now. */}
+      <div className="globe-shell" inert={reading}>
+        <LazyGlobe journey={journey} nav={nav} panelOpen={openPlaceId !== null || overlay === "trips"} onNavigate={dispatch} />
+      </div>
 
       {overlay === "landing" && (
         <Landing journey={journey} onExplore={() => dispatch({ type: "explore" })} onTrips={() => dispatch({ type: "openTrips" })} />
       )}
       {overlay === "trips" && <TripsPanel journey={journey} onClose={back} />}
 
-      {overlay === null && (
+      {overlay === null && !reading && (
         <header className="hud">
           {landing ? (
             <button type="button" className="hud-home" onClick={() => dispatch({ type: "landing" })}>
@@ -75,12 +74,21 @@ export function ExploreApp({
 
       {overlay === null && nav.level === "world" && journey.countries.length === 0 && <p className="hud-empty">Nothing unlocked yet.</p>}
       {country && <CountrySummary journey={journey} country={country} />}
-      {openPlaceId && (
+      {openPlaceId && !reading && (
         <StoryPanel
           key={openPlaceId}
           journey={journey}
           placeId={openPlaceId}
           showTripLink
+          onClose={back}
+          onRead={() => dispatch({ type: "readStory" })}
+          onOpenPlace={(placeId) => dispatch({ type: "openPlace", placeId })}
+        />
+      )}
+      {openPlaceId && reading && (
+        <StoryPage
+          journey={journey}
+          placeId={openPlaceId}
           onClose={back}
           onOpenPlace={(placeId) => dispatch({ type: "openPlace", placeId })}
         />

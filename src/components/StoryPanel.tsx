@@ -1,6 +1,5 @@
-import Link from "next/link";
-import { formatDate, paragraphs, plural } from "@/lib/format";
 import type { Journey } from "@/lib/journey";
+import { Nearby, StoryBlocks, storyOf, TripLink, Visits } from "./story";
 
 interface StoryPanelProps {
   journey: Journey;
@@ -8,26 +7,24 @@ interface StoryPanelProps {
   /** In explore mode, offer a way into the trip's story. Story mode is already in it. */
   showTripLink?: boolean;
   onClose?: () => void;
+  /** The way out of the preview and into the full page, where the story has room. */
+  onRead?: () => void;
   onOpenPlace?: (placeId: string) => void;
 }
 
-/** A place's story, read top to bottom like a journal entry. */
-export function StoryPanel({ journey, placeId, showTripLink = false, onClose, onOpenPlace }: StoryPanelProps) {
-  const place = journey.placeById.get(placeId);
-  const city = journey.cityOf.get(placeId);
-  if (!place || !city) return null;
-
-  const country = journey.countryByCode.get(city.place.countryCode);
-  const trip = place.tripId ? journey.tripById.get(place.tripId) : undefined;
-  // Blank text blocks would only leave a gap.
-  const story = (journey.storyByPlace.get(place.id) ?? []).filter((block) => block.type === "photo" || paragraphs(block.text).length > 0);
-  const nearby = place.kind === "city" ? city.spots : [city.place, ...city.spots.filter((p) => p.id !== place.id)];
-  const where = [place.kind === "spot" ? city.place.name : null, country?.name].filter(Boolean).join(", ");
+/**
+ * The preview: click a pin, see what the place is, without committing to reading
+ * it. The story itself is read as a full page — see `StoryPage`.
+ */
+export function StoryPanel({ journey, placeId, showTripLink = false, onClose, onRead, onOpenPlace }: StoryPanelProps) {
+  const story = storyOf(journey, placeId);
+  if (!story) return null;
+  const { place, trip, blocks } = story;
 
   return (
     <article className="story-panel" aria-labelledby="story-title">
       <div className="story-top">
-        <p className="kicker">{where}</p>
+        <p className="kicker">{story.where}</p>
         {onClose && (
           <button type="button" className="btn" onClick={onClose}>
             Close
@@ -39,50 +36,20 @@ export function StoryPanel({ journey, placeId, showTripLink = false, onClose, on
         <h2 id="story-title" className="story-title">
           {place.name}
         </h2>
-        {place.visitedOn.length > 0 && <p className="story-meta">{place.visitedOn.map(formatDate).join(" · ")}</p>}
-        {showTripLink && trip && (
-          <Link className="trip-badge" href={`/trips/${trip.id}?stop=${place.id}`}>
-            Part of {trip.name}: follow the story →
-          </Link>
+        <Visits place={place} />
+        {showTripLink && trip && <TripLink trip={trip} placeId={place.id} />}
+
+        {onRead && (
+          <p className="story-read">
+            <button type="button" className="btn btn-primary" onClick={onRead}>
+              Read the story →
+            </button>
+          </p>
         )}
 
-        {story.map((block, i) =>
-          block.type === "text" ? (
-            <div key={i} className="story-body">
-              {paragraphs(block.text).map((paragraph, j) => (
-                <p key={j}>{paragraph}</p>
-              ))}
-            </div>
-          ) : (
-            <figure key={block.photo.id} className="story-photo">
-              {/* Photos come from storage at arbitrary sizes, so a plain img rather than next/image. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={block.photo.url} alt={block.photo.caption || place.name} loading="lazy" />
-              {(block.photo.caption || block.photo.takenAt) && (
-                <figcaption>{[block.photo.caption, block.photo.takenAt && formatDate(block.photo.takenAt)].filter(Boolean).join(" · ")}</figcaption>
-              )}
-            </figure>
-          ),
-        )}
+        <StoryBlocks blocks={blocks} alt={place.name} />
 
-        {story.length === 0 && <p className="story-empty">Nothing written here yet.</p>}
-
-        {onOpenPlace && nearby.length > 0 && (
-          <nav className="story-related" aria-label="Nearby">
-            <p className="kicker">
-              {place.kind === "city" ? `${plural(nearby.length, "spot")} around ${place.name}` : `Also around ${city.place.name}`}
-            </p>
-            <ul>
-              {nearby.map((p) => (
-                <li key={p.id}>
-                  <button type="button" className="btn" onClick={() => onOpenPlace(p.id)}>
-                    {p.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        )}
+        {onOpenPlace && <Nearby story={story} onOpenPlace={onOpenPlace} />}
       </div>
     </article>
   );

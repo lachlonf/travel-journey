@@ -84,3 +84,11 @@ _Avoid_: home page, splash, index
 
 **Overlay**:
 Whatever rests over the globe before anywhere has been chosen: the landing, or the trips panel. There is at most one, it always sits over the whole world rather than over somewhere drilled into, and opening a place puts it away.
+
+**Preview**:
+A place's story as it opens beside the globe: enough to tell what somewhere is without leaving the world you clicked it from. The preview is where a story is met; it is never where a story is read.
+_Avoid_: card, popup, detail panel
+
+**Reading**:
+A story taken over the whole screen as a page, where the writing and the prints have the room a panel can't give them. The globe is left exactly where it was underneath, so leaving the page comes back to the same preview over the same country.
+_Avoid_: detail page, article view, modal, lightbox

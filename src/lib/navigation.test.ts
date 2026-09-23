@@ -10,16 +10,17 @@ const go = (view: View, ...actions: Parameters<typeof navigate>[2][]) =>
 describe("navigate", () => {
   it("drills from world to country to city", () => {
     const inCountry = go(initialView, { type: "openCountry", country: "PE" });
-    expect(inCountry).toEqual({ nav: { level: "country", country: "PE" }, openPlaceId: null, overlay: null });
+    expect(inCountry).toEqual({ nav: { level: "country", country: "PE" }, openPlaceId: null, reading: false, overlay: null });
 
     const inCity = go(inCountry, { type: "openCity", cityId: "huaraz" });
-    expect(inCity).toEqual({ nav: { level: "city", country: "PE", cityId: "huaraz" }, openPlaceId: null, overlay: null });
+    expect(inCity).toEqual({ nav: { level: "city", country: "PE", cityId: "huaraz" }, openPlaceId: null, reading: false, overlay: null });
   });
 
   it("opens a city's story straight away when it has no spots to pick from", () => {
     expect(go(initialView, { type: "openCity", cityId: "cusco" })).toEqual({
       nav: { level: "city", country: "PE", cityId: "cusco" },
       openPlaceId: "cusco",
+      reading: false,
       overlay: null,
     });
   });
@@ -28,6 +29,7 @@ describe("navigate", () => {
     expect(go(initialView, { type: "openPlace", placeId: "laguna513" })).toEqual({
       nav: { level: "city", country: "PE", cityId: "huaraz" },
       openPlaceId: "laguna513",
+      reading: false,
       overlay: null,
     });
     expect(go(initialView, { type: "openPlace", placeId: "sydney" }).nav).toEqual({
@@ -55,7 +57,7 @@ describe("navigate", () => {
 
 describe("the landing's two choices", () => {
   it("opens on the landing, over the world", () => {
-    expect(initialView).toEqual({ nav: { level: "world" }, openPlaceId: null, overlay: "landing" });
+    expect(initialView).toEqual({ nav: { level: "world" }, openPlaceId: null, reading: false, overlay: "landing" });
   });
 
   it("clears the landing to explore, leaving the globe where it is", () => {
@@ -63,7 +65,7 @@ describe("the landing's two choices", () => {
   });
 
   it("lays the trips panel over the world, wherever it was asked for", () => {
-    const expected = { nav: { level: "world" }, openPlaceId: null, overlay: "trips" };
+    const expected = { nav: { level: "world" }, openPlaceId: null, reading: false, overlay: "trips" };
     expect(go(initialView, { type: "openTrips" })).toEqual(expected);
     const deep = go(initialView, { type: "openPlace", placeId: "laguna513" });
     expect(go(deep, { type: "openTrips" })).toEqual(expected);
@@ -78,6 +80,7 @@ describe("the landing's two choices", () => {
       expect(go(overlay, { type: "openCountry", country: "PE" })).toEqual({
         nav: { level: "country", country: "PE" },
         openPlaceId: null,
+        reading: false,
         overlay: null,
       });
     }
@@ -131,5 +134,46 @@ describe("cameraTarget", () => {
     const city = cameraTarget(journey, { level: "city", country: "PE", cityId: "huaraz" });
     expect(Math.abs(city.lat! - -9.37)).toBeLessThan(0.1);
     expect(Math.abs(city.lng! - -77.54)).toBeLessThan(0.1);
+  });
+});
+
+describe("reading a story as a full page", () => {
+  const preview = go(initialView, { type: "openPlace", placeId: "laguna513" });
+
+  it("takes the open story over the screen, leaving the globe where it was", () => {
+    const reading = go(preview, { type: "readStory" });
+    expect(reading).toEqual({ ...preview, reading: true });
+  });
+
+  it("has nothing to read until a story is open", () => {
+    expect(go(initialView, { type: "readStory" })).toBe(initialView);
+    const inCountry = go(initialView, { type: "openCountry", country: "PE" });
+    expect(go(inCountry, { type: "readStory" })).toBe(inCountry);
+  });
+
+  it("leaves the story for the preview it was opened from", () => {
+    expect(go(preview, { type: "readStory" }, { type: "back" })).toEqual(preview);
+  });
+
+  it("stays on the full page when another place is opened from within it", () => {
+    const reading = go(preview, { type: "readStory" });
+    expect(go(reading, { type: "openPlace", placeId: "huaraz" })).toEqual({
+      nav: { level: "city", country: "PE", cityId: "huaraz" },
+      openPlaceId: "huaraz",
+      reading: true,
+      overlay: null,
+    });
+  });
+
+  it("closes the full page whenever the globe moves or an overlay opens", () => {
+    const reading = go(preview, { type: "readStory" });
+    for (const action of [
+      { type: "openCountry", country: "PE" },
+      { type: "openCity", cityId: "huaraz" },
+      { type: "landing" },
+      { type: "openTrips" },
+    ] as const) {
+      expect(go(reading, action).reading).toBe(false);
+    }
   });
 });

@@ -81,6 +81,7 @@ The globe shader has no unit tests, because asserting on WebGL output would only
 - [ ] The low-power path renders the same world. Open on a phone, or in devtools with touch emulation on, and compare against desktop: coarser glyphs and a softer sphere, but the same countries unlocked and the same hues. A phone must never show fewer unlocked countries than desktop.
 - [ ] Reduced motion is still the whole journey. With the OS set to reduce motion, the globe doesn't spin on its own, camera moves land instantly, and visited countries are simply already coloured — no dissolve, and nothing missing that motion would have shown.
 - [ ] One globe carries the landing, the trips panel and a preview. Open `/`, choose Follow a trip, come back, then choose Explore and open a place: the globe never blanks or redraws itself, it only moves aside, and the countries stay unlocked throughout. At 400px the title and both choices are readable and the trips panel arrives as a bottom sheet.
+- [ ] A story is previewed on the globe and read off it. Open a place: the panel is the preview, and **Read the story** takes the writing over the whole screen. Leaving the page puts you back on that same preview, over the same country at the same level, with the globe never having redrawn. A place on a trip carries its "part of" link in both, and following it opens that place in story mode rather than the trip's first stop. At 400px the page fills the width, with nothing cut off and nothing scrolling sideways.
 - [ ] The globe at 400px wide is legible. Narrow it with device emulation or a phone, because a Chrome window stops at 500px: the glyphs stay readable rather than turning to noise, pins and labels don't pile up, and drilling into a city still frames it above the bottom sheet.
 
 ## Deploy
@@ -91,7 +92,7 @@ Import the repo into Vercel and set `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABAS
 
 - **`src/lib/`** is the domain, with no framework code and unit tests alongside:
   - `journey.ts` builds the country → city → spot tree and orders trips.
-  - `navigation.ts` handles the three drill-in levels, what rests over the globe (the landing, the trips panel), which pins show at each level, and where the camera goes.
+  - `navigation.ts` handles the three drill-in levels, what rests over the globe (the landing, the trips panel, a story's preview), whether a story has been taken over the screen to read, which pins show at each level, and where the camera goes.
   - `geo.ts` has the sphere maths and the arcing great-circle camera flights.
   - `session.ts`, `exif.ts` and `cities.ts` cover the admin cookie, reading photo GPS and dates, and city search.
 - **`src/components/globe/`** is the Three.js engine. It renders the globe off-screen as one fact per channel: ink density, which country, how lit, and how far that country's unlock has swept past. A second pass then draws locked pixels as ink glyphs on paper, and blooms unlocked ones into their country's tapestry hue. The bloom sweeps west to east, glyph by glyph, behind a front of that same hue steeped darker. Each browser plays a country's unlock once, remembered in `localStorage`.
@@ -106,7 +107,7 @@ Working end to end:
 - ASCII globe with the dissolve unlock
 - Drill-in navigation with arcing camera flights
 - Explore mode and story mode, with story links from explore
-- Journal-style story panel
+- A story previewed in a panel and read as a full page
 - Mobile bottom sheet and a lighter rendering path for phones
 - Password-gated admin: add trips, cities and spots, city search, nearest-city suggestion, and EXIF location and date pre-fill
 - Photos uploaded straight from the browser to storage: resized first when the browser can decode them, each with its own progress, and failed ones retried without retyping a caption
