@@ -1,7 +1,9 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { formatDate, paragraphs, plural } from "@/lib/format";
 import type { Journey, ResolvedStoryBlock } from "@/lib/journey";
-import type { Place, Trip } from "@/lib/types";
+import { printGeometry } from "@/lib/print";
+import type { Photo, Place, Trip } from "@/lib/types";
 
 /** Everything a story needs to be told, whether as a preview or as a full page. */
 export interface Story {
@@ -59,15 +61,29 @@ export function StoryBlocks({ blocks, alt }: { blocks: ResolvedStoryBlock[]; alt
         ))}
       </div>
     ) : (
-      <figure key={block.photo.id} className="story-photo">
+      <Print key={block.photo.id} photo={block.photo} alt={alt} />
+    ),
+  );
+}
+
+/**
+ * One photograph resting on the paper: matted, faintly shadowed, and tilted by
+ * the hand that laid it down. The tilt and the width come from the photo's id,
+ * so a print sits exactly where it sat last time (see `printGeometry`).
+ */
+function Print({ photo, alt }: { photo: Photo; alt: string }) {
+  const { tilt, size } = printGeometry(photo.id);
+  const caption = [photo.caption, photo.takenAt && formatDate(photo.takenAt)].filter(Boolean).join(" · ");
+
+  return (
+    <figure className="print" data-print={size} style={{ "--tilt": `${tilt}deg` } as CSSProperties}>
+      <div className="print-mat">
         {/* Photos come from storage at arbitrary sizes, so a plain img rather than next/image. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={block.photo.url} alt={block.photo.caption || alt} loading="lazy" />
-        {(block.photo.caption || block.photo.takenAt) && (
-          <figcaption>{[block.photo.caption, block.photo.takenAt && formatDate(block.photo.takenAt)].filter(Boolean).join(" · ")}</figcaption>
-        )}
-      </figure>
-    ),
+        <img src={photo.url} alt={photo.caption || alt} loading="lazy" />
+      </div>
+      {caption && <figcaption>{caption}</figcaption>}
+    </figure>
   );
 }
 

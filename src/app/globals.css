@@ -580,19 +580,69 @@ a {
   margin-top: 1.1rem;
 }
 
-.story-photo {
-  margin: 2.25rem -1.5rem;
+/*
+ * A print: a photograph resting on the paper rather than punched into it. The
+ * mat is a brighter sheet than the ground and the shadow is barely there, so it
+ * reads as an object laid down. The tilt is set per print by `printGeometry`,
+ * derived from the photo's id, so the page never rearranges itself. A tilt is a
+ * resting position rather than a movement — nothing here animates or responds to
+ * a pointer — so reduced motion has nothing to turn off.
+ */
+.print {
+  /* How far a tilted corner may swing. The figure keeps this much room either
+     side, which is what stops a print ever crossing its container. */
+  --swing: 1.75rem;
+  /* Overridden where a narrow screen wants a gentler lean; never a new tilt. */
+  --tilt-scale: 1;
+  width: min(var(--print-width), 100%);
+  margin: 2.5rem auto;
+  padding-inline: var(--swing);
 }
 
-.story-photo img {
+/* The three widths a print is drawn at, so sizes vary wherever a story is told. */
+.print[data-print="narrow"] {
+  --print-width: 28rem;
+}
+
+.print[data-print="wide"] {
+  --print-width: 40rem;
+}
+
+.print[data-print="full"] {
+  --print-width: 54rem;
+}
+
+.print .print-mat {
+  padding: 0.7rem;
+  background: var(--paper-raised);
+  /* A whisper: a contact edge, then the softest lift off the page. */
+  box-shadow:
+    0 1px 1px color-mix(in srgb, var(--ink) 12%, transparent),
+    0 10px 20px -12px color-mix(in srgb, var(--ink) 30%, transparent);
+  transform: rotate(calc(var(--tilt, 0deg) * var(--tilt-scale)));
+}
+
+/*
+ * A print is never taller than the screen it rests on. A tall photograph keeps
+ * its shape and sits within the mat, which is what a tall print looks like
+ * anyway, and which bounds how far a tilted corner can swing. Dynamic units, so
+ * a phone's shrinking chrome can't push the bottom of a print out of reach.
+ */
+.print img {
   display: block;
   width: 100%;
   height: auto;
+  max-height: 70dvh;
+  object-fit: contain;
   background: var(--paper-raised);
 }
 
-.story-photo figcaption {
-  padding: 0.6rem 1.5rem 0;
+/*
+ * The caption stays level and attached: typed on the back, not part of the tilt.
+ * The gap clears the corner the widest print drops when it leans.
+ */
+.print figcaption {
+  padding: 1.1rem 0.2rem 0;
   font-family: var(--meta);
   font-size: 0.76rem;
   color: var(--ink-dim);
@@ -692,16 +742,16 @@ a {
   font-size: 1.15rem;
 }
 
-/* A print rests on the page, not inside the column of text. */
-.story-page .story-photo {
+/*
+ * A print rests on the page, not inside the column of text. It keeps a gutter
+ * either side of its own width, so the widest print still clears the edge of the
+ * page with the room a tilt swings into left over.
+ */
+.story-page .print {
   grid-column: 1 / -1;
   justify-self: center;
-  width: min(54rem, calc(100% - 2 * var(--gutter)));
-  margin: 3rem 0;
-}
-
-.story-page .story-photo figcaption {
-  padding-inline: 0;
+  max-width: calc(100% - 2 * var(--gutter));
+  margin-block: 3.5rem;
 }
 
 /* Story mode */
@@ -802,12 +852,14 @@ a {
     padding-inline: var(--gutter);
   }
 
-  .story-photo {
-    margin-inline: calc(-1 * var(--gutter));
-  }
-
-  .story-photo figcaption {
-    padding-inline: var(--gutter);
+  /*
+   * A narrow screen has no room to give away, so a print leans less and needs
+   * less room to lean into. The tilt is scaled rather than re-derived: the same
+   * photo leans the same way, by the same proportion, at every width.
+   */
+  .print {
+    --swing: 0.6rem;
+    --tilt-scale: 0.6;
   }
 
   .story-bar,
