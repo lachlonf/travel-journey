@@ -125,15 +125,41 @@ a {
   border-style: dashed;
 }
 
-/* Landing */
+/* Landing: a title and two choices resting on the live globe, never a page of its own. */
 
 .landing {
+  position: absolute;
+  top: 50%;
+  left: var(--gutter);
+  z-index: 3;
   display: flex;
   flex-direction: column;
-  gap: 3rem;
-  max-width: 46rem;
-  margin: 0 auto;
-  padding: 14vh var(--gutter) 5rem;
+  gap: 2rem;
+  width: min(36rem, calc(100% - 2 * var(--gutter)));
+  max-height: calc(100% - 2 * var(--gutter));
+  overflow-y: auto;
+  transform: translateY(-50%);
+  /* The globe stays live around the words, so it can be spun from beside them. */
+  pointer-events: none;
+}
+
+.landing > * {
+  pointer-events: auto;
+}
+
+/* An unlocked country wears its tapestry hue, so the title sits on its own backing. */
+.landing header {
+  padding: 1.1rem 1.2rem;
+  background: var(--paper-glass);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+}
+
+/* Level with each other: following a trip is a way in, not a lesser one. */
+.landing-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1rem;
 }
 
 .landing h1 {
@@ -152,6 +178,9 @@ a {
 
 .choice {
   display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
   padding: 1.4rem 1.5rem;
   background: var(--paper-raised);
   border: 1px solid var(--line);
@@ -466,7 +495,8 @@ a {
 
 /* Story panel: right-hand column on wide screens, bottom sheet on narrow ones. */
 
-.story-panel {
+.story-panel,
+.trips-panel {
   position: absolute;
   top: 0;
   right: 0;
@@ -660,7 +690,8 @@ a {
 
 /* Matches SHEET_BREAKPOINT_PX and SHEET_HEIGHT in the globe engine. */
 @media (max-width: 900px) {
-  .story-panel {
+  .story-panel,
+  .trips-panel {
     top: auto;
     width: 100%;
     height: 60dvh;
@@ -671,6 +702,12 @@ a {
 
   .story-top {
     padding-inline: var(--gutter);
+  }
+
+  .landing {
+    top: auto;
+    bottom: var(--gutter);
+    transform: none;
   }
 
   .story-inner {
@@ -706,7 +743,8 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .pin-dot,
   .globe-loading,
-  .story-panel {
+  .story-panel,
+  .trips-panel {
     animation: none;
   }
 }

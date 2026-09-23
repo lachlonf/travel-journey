@@ -8,16 +8,23 @@ export type Nav =
   | { level: "country"; country: string }
   | { level: "city"; country: string; cityId: string };
 
+/** What rests over the globe before anywhere has been chosen. */
+export type Overlay = "landing" | "trips" | null;
+
 export interface View {
   nav: Nav;
   /** The place whose story panel is open, if any. */
   openPlaceId: string | null;
+  overlay: Overlay;
 }
 
 export type NavAction =
   | { type: "openCountry"; country: string }
   | { type: "openCity"; cityId: string }
   | { type: "openPlace"; placeId: string }
+  | { type: "openTrips" }
+  | { type: "landing" }
+  | { type: "explore" }
   | { type: "back" };
 
 export interface Pin {
@@ -35,7 +42,11 @@ export interface CameraTarget {
   altitude: number;
 }
 
-export const initialView: View = { nav: { level: "world" }, openPlaceId: null };
+/** The globe with nothing over it: what the Explore choice leads to. */
+export const exploringView: View = { nav: { level: "world" }, openPlaceId: null, overlay: null };
+
+/** The site opens on the landing, which is the same world with a title over it. */
+export const initialView: View = { ...exploringView, overlay: "landing" };
 
 export const WORLD_ALTITUDE = 2.2;
 /** Km of spread that fills the view at altitude 1, for a 45° field of view with some margin. */
@@ -47,24 +58,32 @@ export function navigate(journey: Journey, view: View, action: NavAction): View 
   switch (action.type) {
     case "openCountry":
       return journey.countryByCode.has(action.country)
-        ? { nav: { level: "country", country: action.country }, openPlaceId: null }
+        ? { nav: { level: "country", country: action.country }, openPlaceId: null, overlay: null }
         : view;
     case "openCity": {
       const node = journey.cityOf.get(action.cityId);
       if (node?.place.id !== action.cityId) return view;
       // Nothing to choose between, so go straight to the story.
-      return { nav: cityNav(node), openPlaceId: node.spots.length ? null : node.place.id };
+      return { nav: cityNav(node), openPlaceId: node.spots.length ? null : node.place.id, overlay: null };
     }
     case "openPlace": {
       const node = journey.cityOf.get(action.placeId);
-      return node ? { nav: cityNav(node), openPlaceId: action.placeId } : view;
+      return node ? { nav: cityNav(node), openPlaceId: action.placeId, overlay: null } : view;
     }
+    case "landing":
+      return initialView;
+    case "openTrips":
+      return view.overlay === "trips" ? view : { ...view, overlay: "trips" };
+    case "explore":
+      return view.overlay === null ? view : { ...view, overlay: null };
     case "back": {
       const { nav } = view;
+      // Outwards one layer at a time: the trips panel, the story, the globe, the landing.
+      if (view.overlay === "trips") return { ...view, overlay: "landing" };
       if (view.openPlaceId) return { ...view, openPlaceId: null };
-      if (nav.level === "city") return { nav: { level: "country", country: nav.country }, openPlaceId: null };
-      if (nav.level === "country") return initialView;
-      return view;
+      if (nav.level === "city") return { nav: { level: "country", country: nav.country }, openPlaceId: null, overlay: null };
+      if (nav.level === "country") return exploringView;
+      return view.overlay === null ? initialView : view;
     }
   }
 }

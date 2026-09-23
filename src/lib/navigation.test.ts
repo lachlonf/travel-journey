@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fixture } from "./__fixtures__/journey";
 import { buildJourney } from "./journey";
-import { cameraTarget, initialView, navigate, visiblePins, type View } from "./navigation";
+import { cameraTarget, exploringView, initialView, navigate, visiblePins, type View } from "./navigation";
 
 const journey = buildJourney(fixture);
 const go = (view: View, ...actions: Parameters<typeof navigate>[2][]) =>
@@ -10,16 +10,17 @@ const go = (view: View, ...actions: Parameters<typeof navigate>[2][]) =>
 describe("navigate", () => {
   it("drills from world to country to city", () => {
     const inCountry = go(initialView, { type: "openCountry", country: "PE" });
-    expect(inCountry).toEqual({ nav: { level: "country", country: "PE" }, openPlaceId: null });
+    expect(inCountry).toEqual({ nav: { level: "country", country: "PE" }, openPlaceId: null, overlay: null });
 
     const inCity = go(inCountry, { type: "openCity", cityId: "huaraz" });
-    expect(inCity).toEqual({ nav: { level: "city", country: "PE", cityId: "huaraz" }, openPlaceId: null });
+    expect(inCity).toEqual({ nav: { level: "city", country: "PE", cityId: "huaraz" }, openPlaceId: null, overlay: null });
   });
 
   it("opens a city's story straight away when it has no spots to pick from", () => {
     expect(go(initialView, { type: "openCity", cityId: "cusco" })).toEqual({
       nav: { level: "city", country: "PE", cityId: "cusco" },
       openPlaceId: "cusco",
+      overlay: null,
     });
   });
 
@@ -27,6 +28,7 @@ describe("navigate", () => {
     expect(go(initialView, { type: "openPlace", placeId: "laguna513" })).toEqual({
       nav: { level: "city", country: "PE", cityId: "huaraz" },
       openPlaceId: "laguna513",
+      overlay: null,
     });
     expect(go(initialView, { type: "openPlace", placeId: "sydney" }).nav).toEqual({
       level: "city",
@@ -35,18 +37,59 @@ describe("navigate", () => {
     });
   });
 
-  it("backs out one step at a time: story, then city, then country", () => {
+  it("backs out one step at a time: story, then city, then country, then the landing", () => {
     const deep = go(initialView, { type: "openPlace", placeId: "laguna513" });
     const closed = go(deep, { type: "back" });
     expect(closed).toEqual({ ...deep, openPlaceId: null });
     expect(go(closed, { type: "back" }).nav).toEqual({ level: "country", country: "PE" });
-    expect(go(closed, { type: "back" }, { type: "back" }).nav).toEqual({ level: "world" });
+    expect(go(closed, { type: "back" }, { type: "back" })).toEqual(exploringView);
+    expect(go(closed, { type: "back" }, { type: "back" }, { type: "back" })).toEqual(initialView);
     expect(go(initialView, { type: "back" })).toBe(initialView);
   });
 
   it("ignores unknown targets", () => {
     expect(go(initialView, { type: "openCountry", country: "FR" })).toBe(initialView);
     expect(go(initialView, { type: "openPlace", placeId: "nope" })).toBe(initialView);
+  });
+});
+
+describe("the landing's two choices", () => {
+  it("opens on the landing, over the world", () => {
+    expect(initialView).toEqual({ nav: { level: "world" }, openPlaceId: null, overlay: "landing" });
+  });
+
+  it("clears the landing to explore, leaving the globe where it is", () => {
+    expect(go(initialView, { type: "explore" })).toEqual(exploringView);
+  });
+
+  it("lays the trips panel over the same world", () => {
+    const trips = go(initialView, { type: "openTrips" });
+    expect(trips).toEqual({ nav: { level: "world" }, openPlaceId: null, overlay: "trips" });
+  });
+
+  it("goes back from the trips panel to the landing", () => {
+    expect(go(initialView, { type: "openTrips" }, { type: "back" })).toEqual(initialView);
+  });
+
+  it("puts the landing away when a place is opened from under it", () => {
+    for (const overlay of [initialView, go(initialView, { type: "openTrips" })]) {
+      expect(go(overlay, { type: "openCountry", country: "PE" })).toEqual({
+        nav: { level: "country", country: "PE" },
+        openPlaceId: null,
+        overlay: null,
+      });
+    }
+  });
+
+  it("returns to the landing from anywhere, keeping the world beneath", () => {
+    const deep = go(initialView, { type: "openPlace", placeId: "laguna513" });
+    expect(go(deep, { type: "landing" })).toEqual(initialView);
+  });
+
+  it("does nothing when a choice is made twice, or made while exploring", () => {
+    const trips = go(initialView, { type: "openTrips" });
+    expect(go(trips, { type: "openTrips" })).toBe(trips);
+    expect(go(exploringView, { type: "explore" })).toBe(exploringView);
   });
 });
 

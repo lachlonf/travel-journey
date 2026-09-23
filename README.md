@@ -80,6 +80,7 @@ The globe shader has no unit tests, because asserting on WebGL output would only
 - [ ] A country with no curated hue wears the fallback. Add a place in a country absent from `TAPESTRY_HUES` (Norway, say): it unlocks like any other, in undyed alpaca, and nothing errors.
 - [ ] The low-power path renders the same world. Open on a phone, or in devtools with touch emulation on, and compare against desktop: coarser glyphs and a softer sphere, but the same countries unlocked and the same hues. A phone must never show fewer unlocked countries than desktop.
 - [ ] Reduced motion is still the whole journey. With the OS set to reduce motion, the globe doesn't spin on its own, camera moves land instantly, and visited countries are simply already coloured — no dissolve, and nothing missing that motion would have shown.
+- [ ] One globe carries the landing, the trips panel and a preview. Open `/`, choose Follow a trip, come back, then choose Explore and open a place: the globe never blanks or redraws itself, it only moves aside, and the countries stay unlocked throughout. At 400px the title and both choices are readable and the trips panel arrives as a bottom sheet.
 - [ ] The globe at 400px wide is legible. Narrow it with device emulation or a phone, because a Chrome window stops at 500px: the glyphs stay readable rather than turning to noise, pins and labels don't pile up, and drilling into a city still frames it above the bottom sheet.
 
 ## Deploy
@@ -90,13 +91,13 @@ Import the repo into Vercel and set `ADMIN_PASSWORD`, `SESSION_SECRET`, `SUPABAS
 
 - **`src/lib/`** is the domain, with no framework code and unit tests alongside:
   - `journey.ts` builds the country → city → spot tree and orders trips.
-  - `navigation.ts` handles the three drill-in levels, which pins show at each, and where the camera goes.
+  - `navigation.ts` handles the three drill-in levels, what rests over the globe (the landing, the trips panel), which pins show at each level, and where the camera goes.
   - `geo.ts` has the sphere maths and the arcing great-circle camera flights.
   - `session.ts`, `exif.ts` and `cities.ts` cover the admin cookie, reading photo GPS and dates, and city search.
 - **`src/components/globe/`** is the Three.js engine. It renders the globe off-screen as one fact per channel: ink density, which country, how lit, and how far that country's unlock has swept past. A second pass then draws locked pixels as ink glyphs on paper, and blooms unlocked ones into their country's tapestry hue. The bloom sweeps west to east, glyph by glyph, behind a front of that same hue steeped darker. Each browser plays a country's unlock once, remembered in `localStorage`.
 - **`src/lib/repository/`** holds the Supabase store and the local JSON store, both behind one interface.
 - **`scripts/`** holds what's run by hand rather than by the app. `sweep.ts` collects bucket objects no photo points at; it runs on Node directly, which is why the imports it reaches name their `.ts` files.
-- **`src/app/`** has the pages: `/` landing, `/explore`, `/trips/[id]` (story mode), `/admin`, `/admin/trips/[id]` (editing one trip) and `/admin/places/[id]` (editing one place).
+- **`src/app/`** has the pages: `/` (the landing, over the globe), `/explore`, `/trips/[id]` (story mode), `/admin`, `/admin/trips/[id]` (editing one trip) and `/admin/places/[id]` (editing one place).
 
 ## Scaffold status
 

@@ -1,19 +1,33 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildJourney } from "@/lib/journey";
-import { initialView, navigate, type NavAction } from "@/lib/navigation";
+import { exploringView, initialView, navigate, type NavAction } from "@/lib/navigation";
 import type { JourneyData } from "@/lib/types";
 import { LazyGlobe } from "./globe/LazyGlobe";
 import { Breadcrumbs, CountrySummary } from "./hud";
+import { Landing, TripsPanel } from "./Landing";
 import { StoryPanel } from "./StoryPanel";
 
-export function ExploreApp({ data, initialPlaceId }: { data: JourneyData; initialPlaceId?: string }) {
+/**
+ * One globe, mounted once. The landing, the trips panel and a story panel are
+ * all layers over it, so nothing here ever unmounts the world.
+ */
+export function ExploreApp({
+  data,
+  initialPlaceId,
+  landing = false,
+}: {
+  data: JourneyData;
+  initialPlaceId?: string;
+  /** Open on the landing, rather than straight onto the bare globe. */
+  landing?: boolean;
+}) {
   const journey = useMemo(() => buildJourney(data), [data]);
-  const [view, setView] = useState(() =>
-    initialPlaceId ? navigate(journey, initialView, { type: "openPlace", placeId: initialPlaceId }) : initialView,
-  );
+  const [view, setView] = useState(() => {
+    const start = landing ? initialView : exploringView;
+    return initialPlaceId ? navigate(journey, start, { type: "openPlace", placeId: initialPlaceId }) : start;
+  });
   const dispatch = useCallback((action: NavAction) => setView((current) => navigate(journey, current, action)), [journey]);
   const back = useCallback(() => dispatch({ type: "back" }), [dispatch]);
 
@@ -25,21 +39,33 @@ export function ExploreApp({ data, initialPlaceId }: { data: JourneyData; initia
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [back]);
 
-  const { nav, openPlaceId } = view;
+  const { nav, openPlaceId, overlay } = view;
   const country = nav.level === "country" ? journey.countryByCode.get(nav.country) : undefined;
 
   return (
     <main className="stage">
-      <LazyGlobe journey={journey} nav={nav} panelOpen={openPlaceId !== null} onNavigate={dispatch} />
+      <LazyGlobe
+        journey={journey}
+        nav={nav}
+        panelOpen={openPlaceId !== null || overlay === "trips"}
+        onNavigate={dispatch}
+      />
 
-      <header className="hud">
-        <Link href="/" className="hud-home">
-          Journey
-        </Link>
-        <Breadcrumbs journey={journey} nav={nav} onBack={back} />
-      </header>
+      {overlay === "landing" && (
+        <Landing journey={journey} onExplore={() => dispatch({ type: "explore" })} onTrips={() => dispatch({ type: "openTrips" })} />
+      )}
+      {overlay === "trips" && <TripsPanel journey={journey} onClose={back} />}
 
-      {nav.level === "world" && journey.countries.length === 0 && <p className="hud-empty">Nothing unlocked yet.</p>}
+      {overlay === null && (
+        <header className="hud">
+          <button type="button" className="hud-home" onClick={() => dispatch({ type: "landing" })}>
+            Journey
+          </button>
+          <Breadcrumbs journey={journey} nav={nav} onBack={back} />
+        </header>
+      )}
+
+      {overlay === null && nav.level === "world" && journey.countries.length === 0 && <p className="hud-empty">Nothing unlocked yet.</p>}
       {country && <CountrySummary journey={journey} country={country} />}
       {openPlaceId && (
         <StoryPanel
