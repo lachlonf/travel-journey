@@ -588,12 +588,18 @@ a {
  * resting position rather than a movement — nothing here animates or responds to
  * a pointer — so reduced motion has nothing to turn off.
  */
-.print {
+.print,
+.print-pair {
   /* How far a tilted corner may swing. The figure keeps this much room either
      side, which is what stops a print ever crossing its container. */
   --swing: 1.75rem;
   /* Overridden where a narrow screen wants a gentler lean; never a new tilt. */
   --tilt-scale: 1;
+  /* The widest a print rests, which is also how wide a pair of them rests. */
+  --print-width-full: 54rem;
+}
+
+.print {
   width: min(var(--print-width), 100%);
   margin: 2.5rem auto;
   padding-inline: var(--swing);
@@ -609,7 +615,7 @@ a {
 }
 
 .print[data-print="full"] {
-  --print-width: 54rem;
+  --print-width: var(--print-width-full);
 }
 
 .print .print-mat {
@@ -747,11 +753,63 @@ a {
  * either side of its own width, so the widest print still clears the edge of the
  * page with the room a tilt swings into left over.
  */
-.story-page .print {
+.story-page .print,
+.story-page .print-pair {
   grid-column: 1 / -1;
   justify-self: center;
   max-width: calc(100% - 2 * var(--gutter));
   margin-block: 3.5rem;
+}
+
+/*
+ * The interlocked pair: the one place in a story where two prints are allowed to
+ * touch, as a hand laying the second down over the corner of the first. Reading
+ * is the only place with room for it — in a preview, and on a narrow screen
+ * below, the same two prints simply stack, as every other print does.
+ *
+ * Each print stays a whole figure with its own caption: nothing here unboxes
+ * them, so a screen reader still hears a caption as belonging to its print. The
+ * upper print types its caption above itself instead of below, which is what
+ * keeps the tuck honest — the lower print then meets a mat rather than a line of
+ * words, and rises over it by `--tuck` and no further, so what is covered is a
+ * corner of a photograph and never anything that has to be read.
+ *
+ * The two prints are sized by the pair rather than by their own size buckets: a
+ * pair is one composition, and it is laid out by position alone so that the one
+ * overlap in a story is never the uncertain part of the page.
+ */
+.story-page .print-pair {
+  /* How far the lower print's mat rises over the upper one's. */
+  --tuck: 2.25rem;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  width: var(--print-width-full);
+  padding-inline: var(--swing);
+}
+
+/* The pair places both prints, so each gives up the width and room it rests in alone. */
+.story-page .print-pair .print {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding-inline: 0;
+}
+
+.story-page .print-pair .print:first-child {
+  grid-area: 1 / 1 / 2 / 8;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+/* Typed above the print it belongs to, so the tuck below it has only mat to meet. */
+.story-page .print-pair .print:first-child figcaption {
+  padding: 0 0 0.9rem;
+}
+
+.story-page .print-pair .print:last-child {
+  z-index: 1;
+  grid-area: 2 / 6 / 3 / 13;
+  margin-top: calc(-1 * var(--tuck));
 }
 
 /* Story mode */
@@ -857,9 +915,43 @@ a {
    * less room to lean into. The tilt is scaled rather than re-derived: the same
    * photo leans the same way, by the same proportion, at every width.
    */
-  .print {
+  .print,
+  .print-pair {
     --swing: 0.6rem;
     --tilt-scale: 0.6;
+  }
+
+  /*
+   * Two prints side by side would leave neither one recognisable here, so the
+   * pair gives up everything it does and becomes two prints in a column: no
+   * grid, no tuck, no caption moved above its print. The gesture is worth a
+   * corner, never a photograph.
+   */
+  .story-page .print-pair {
+    display: block;
+    width: auto;
+    padding-inline: 0;
+  }
+
+  .story-page .print-pair .print {
+    display: block;
+    width: min(var(--print-width), 100%);
+    margin: 0 auto;
+    padding-inline: var(--swing);
+  }
+
+  /* The caption goes back under its print: there is no tuck for it to keep clear of. */
+  .story-page .print-pair .print:first-child {
+    display: block;
+  }
+
+  .story-page .print-pair .print:first-child figcaption {
+    padding: 1.1rem 0.2rem 0;
+  }
+
+  /* The room two prints keep between them anywhere else in the story. */
+  .story-page .print-pair .print:last-child {
+    margin-top: 7rem;
   }
 
   .story-bar,

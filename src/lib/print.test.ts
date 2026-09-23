@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_TILT, MIN_TILT, PRINT_SIZES, printGeometry } from "./print";
+import { interlockedPairAt, MAX_TILT, MIN_TILT, PRINT_SIZES, printGeometry } from "./print";
 
 const ids = Array.from({ length: 400 }, (_, i) => `photo-${i}`);
 
@@ -67,5 +67,34 @@ describe("printGeometry", () => {
     // Only a few dozen geometries exist, so any two ids may share one; the point
     // is that a difference in an id can reach the geometry at all.
     expect(ids.some((id) => printGeometry(id).tilt !== printGeometry(id.toUpperCase()).tilt)).toBe(true);
+  });
+});
+
+const story = (shape: string) => [...shape].map((c) => ({ type: c === "p" ? "photo" : "text" }) as const);
+
+describe("interlockedPairAt", () => {
+  it("interlocks the first two photographs that sit next to each other", () => {
+    expect(interlockedPairAt(story("tppt"))).toBe(1);
+  });
+
+  it("always picks the same pair in the same story, rather than one chosen by hash", () => {
+    expect(interlockedPairAt(story("ppttpp"))).toBe(0);
+    expect(interlockedPairAt(story("tpptpp"))).toBe(1);
+  });
+
+  it("leaves a third photograph in a run to rest on its own, so a story interlocks once", () => {
+    expect(interlockedPairAt(story("pppp"))).toBe(0);
+  });
+
+  it("interlocks nothing where no two photographs are adjacent", () => {
+    // Pairing across a passage of text would reorder the story, which is the one
+    // thing the layout may never do.
+    expect(interlockedPairAt(story("ptptp"))).toBeNull();
+  });
+
+  it("interlocks nothing in a story with one photograph, or none at all", () => {
+    expect(interlockedPairAt(story("p"))).toBeNull();
+    expect(interlockedPairAt(story("ttt"))).toBeNull();
+    expect(interlockedPairAt([])).toBeNull();
   });
 });

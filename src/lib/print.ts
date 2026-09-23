@@ -1,7 +1,9 @@
 /**
  * How a photograph rests on the paper. A print's tilt and size are derived from
  * its photo's id: never random, so the page doesn't rearrange itself on every
- * render and read as a bug, and never stored, so nobody has to decide.
+ * render and read as a bug, and never stored, so nobody has to decide. Which
+ * two prints in a story interlock is settled here too, by position rather than
+ * by id, so a story's one overlap is as predictable as the rest of the layout.
  */
 
 /** How wide a print rests, as a name the stylesheet draws. */
@@ -49,6 +51,26 @@ export function printGeometry(photoId: string): PrintGeometry {
     // Tilt and size are hashed apart so a print's lean says nothing about its width.
     size: SIZE_WEIGHTS[hash(photoId, "size") % SIZE_WEIGHTS.length],
   };
+}
+
+/**
+ * Which two prints in a story interlock, as the index of the upper one of the
+ * pair — or null where a story has no pair to make.
+ *
+ * Chosen by position and not by hash: a story interlocks the first two
+ * photographs that sit next to each other in it, so the same story interlocks
+ * the same two prints forever, and a reader who comes back finds the page they
+ * left. Adjacent, because a pair is laid out where it already stands: nothing
+ * here reorders a story, so a screen reader hears the pair exactly where the
+ * writing put it.
+ */
+export function interlockedPairAt(blocks: readonly { type: "text" | "photo" }[]): number | null {
+  for (let i = 0; i + 1 < blocks.length; i++) {
+    // A run of three interlocks its first two and leaves the rest resting flat:
+    // one pair is a gesture, several are a collage.
+    if (blocks[i].type === "photo" && blocks[i + 1].type === "photo") return i;
+  }
+  return null;
 }
 
 const TILT_STOPS = Math.round((MAX_TILT - MIN_TILT) / TILT_STEP) + 1;

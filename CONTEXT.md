@@ -78,6 +78,10 @@ _Avoid_: shimmer, glow, highlight
 A photograph as it appears in a story: matted, very slightly tilted, resting on the paper as a physical print would. Prints never overlap, apart from one deliberate interlocked pair per story.
 _Avoid_: image, thumbnail, card, tile
 
+**Interlocked pair**:
+The one pair of prints in a story that rest against each other, the lower one laid over the upper one's corner. It is chosen by position — the first two photographs standing next to each other in the story — so a story interlocks the same two prints forever, and never covers more of either than a corner. A story read in a preview, or on a narrow screen, has no room for it and stacks the pair instead.
+_Avoid_: collage, overlap, stack
+
 **Landing**:
 The title and the two choices — Explore and Trips — resting on the globe when the site opens. The landing is a layer over the world, never a page of its own, so choosing either one never reloads the globe.
 _Avoid_: home page, splash, index

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { formatDate, paragraphs, plural } from "@/lib/format";
 import type { Journey, ResolvedStoryBlock } from "@/lib/journey";
-import { printGeometry } from "@/lib/print";
+import { interlockedPairAt, printGeometry } from "@/lib/print";
 import type { Photo, Place, Trip } from "@/lib/types";
 
 /** Everything a story needs to be told, whether as a preview or as a full page. */
@@ -48,22 +48,43 @@ export const TripLink = ({ trip, placeId }: { trip: Trip; placeId: string }) => 
 
 /**
  * A story in the order it was written: one element per block, in block order, so
- * a screen reader hears exactly what a reader sees however the prints are laid out.
+ * a screen reader hears exactly what a reader sees however the prints are laid
+ * out. The interlocked pair is a wrapper around two blocks that already sit next
+ * to each other, so even that leaves the order it found alone.
  */
 export function StoryBlocks({ blocks, alt }: { blocks: ResolvedStoryBlock[]; alt: string }) {
   if (blocks.length === 0) return <p className="story-empty">Nothing written here yet.</p>;
 
-  return blocks.map((block, i) =>
-    block.type === "text" ? (
-      <div key={i} className="story-body">
-        {paragraphs(block.text).map((paragraph, j) => (
-          <p key={j}>{paragraph}</p>
-        ))}
-      </div>
-    ) : (
-      <Print key={block.photo.id} photo={block.photo} alt={alt} />
-    ),
-  );
+  const pairAt = interlockedPairAt(blocks);
+  const told = [];
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const under = blocks[i + 1];
+
+    if (block.type === "text") {
+      told.push(
+        <div key={i} className="story-body">
+          {paragraphs(block.text).map((paragraph, j) => (
+            <p key={j}>{paragraph}</p>
+          ))}
+        </div>,
+      );
+    } else if (i === pairAt && under?.type === "photo") {
+      told.push(
+        <div key={block.photo.id} className="print-pair">
+          <Print photo={block.photo} alt={alt} />
+          <Print photo={under.photo} alt={alt} />
+        </div>,
+      );
+      // The block under this one has been told as the other half of the pair.
+      i++;
+    } else {
+      told.push(<Print key={block.photo.id} photo={block.photo} alt={alt} />);
+    }
+  }
+
+  return told;
 }
 
 /**
