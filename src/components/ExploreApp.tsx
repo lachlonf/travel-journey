@@ -1,13 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildJourney } from "@/lib/journey";
 import { exploringView, initialView, navigate, type NavAction } from "@/lib/navigation";
 import type { JourneyData } from "@/lib/types";
 import { LazyGlobe } from "./globe/LazyGlobe";
 import { Breadcrumbs, CountrySummary } from "./hud";
-import { Landing, TripsPanel } from "./Landing";
+import { Landing } from "./Landing";
 import { StoryPanel } from "./StoryPanel";
+import { TripsPanel } from "./TripsPanel";
 
 /**
  * One globe, mounted once. The landing, the trips panel and a story panel are
@@ -20,7 +22,7 @@ export function ExploreApp({
 }: {
   data: JourneyData;
   initialPlaceId?: string;
-  /** Open on the landing, rather than straight onto the bare globe. */
+  /** Whether this route carries the landing, or is the bare globe with a way back to it. */
   landing?: boolean;
 }) {
   const journey = useMemo(() => buildJourney(data), [data]);
@@ -58,9 +60,15 @@ export function ExploreApp({
 
       {overlay === null && (
         <header className="hud">
-          <button type="button" className="hud-home" onClick={() => dispatch({ type: "landing" })}>
-            Journey
-          </button>
+          {landing ? (
+            <button type="button" className="hud-home" onClick={() => dispatch({ type: "landing" })}>
+              Journey
+            </button>
+          ) : (
+            <Link href="/" className="hud-home">
+              Journey
+            </Link>
+          )}
           <Breadcrumbs journey={journey} nav={nav} onBack={back} />
         </header>
       )}

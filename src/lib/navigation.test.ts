@@ -37,13 +37,13 @@ describe("navigate", () => {
     });
   });
 
-  it("backs out one step at a time: story, then city, then country, then the landing", () => {
+  it("backs out one step at a time: story, then city, then country", () => {
     const deep = go(initialView, { type: "openPlace", placeId: "laguna513" });
     const closed = go(deep, { type: "back" });
     expect(closed).toEqual({ ...deep, openPlaceId: null });
     expect(go(closed, { type: "back" }).nav).toEqual({ level: "country", country: "PE" });
     expect(go(closed, { type: "back" }, { type: "back" })).toEqual(exploringView);
-    expect(go(closed, { type: "back" }, { type: "back" }, { type: "back" })).toEqual(initialView);
+    expect(go(exploringView, { type: "back" })).toBe(exploringView);
     expect(go(initialView, { type: "back" })).toBe(initialView);
   });
 
@@ -62,9 +62,11 @@ describe("the landing's two choices", () => {
     expect(go(initialView, { type: "explore" })).toEqual(exploringView);
   });
 
-  it("lays the trips panel over the same world", () => {
-    const trips = go(initialView, { type: "openTrips" });
-    expect(trips).toEqual({ nav: { level: "world" }, openPlaceId: null, overlay: "trips" });
+  it("lays the trips panel over the world, wherever it was asked for", () => {
+    const expected = { nav: { level: "world" }, openPlaceId: null, overlay: "trips" };
+    expect(go(initialView, { type: "openTrips" })).toEqual(expected);
+    const deep = go(initialView, { type: "openPlace", placeId: "laguna513" });
+    expect(go(deep, { type: "openTrips" })).toEqual(expected);
   });
 
   it("goes back from the trips panel to the landing", () => {

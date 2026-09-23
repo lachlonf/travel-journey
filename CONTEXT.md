@@ -77,3 +77,10 @@ _Avoid_: shimmer, glow, highlight
 **Print**:
 A photograph as it appears in a story: matted, very slightly tilted, resting on the paper as a physical print would. Prints never overlap, apart from one deliberate interlocked pair per story.
 _Avoid_: image, thumbnail, card, tile
+
+**Landing**:
+The title and the two choices — Explore and Trips — resting on the globe when the site opens. The landing is a layer over the world, never a page of its own, so choosing either one never reloads the globe.
+_Avoid_: home page, splash, index
+
+**Overlay**:
+Whatever rests over the globe before anywhere has been chosen: the landing, or the trips panel. There is at most one, it always sits over the whole world rather than over somewhere drilled into, and opening a place puts it away.

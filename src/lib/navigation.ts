@@ -70,10 +70,11 @@ export function navigate(journey: Journey, view: View, action: NavAction): View 
       const node = journey.cityOf.get(action.placeId);
       return node ? { nav: cityNav(node), openPlaceId: action.placeId, overlay: null } : view;
     }
+    // An overlay always rests on the world, never over a country you had drilled into.
     case "landing":
       return initialView;
     case "openTrips":
-      return view.overlay === "trips" ? view : { ...view, overlay: "trips" };
+      return view.overlay === "trips" ? view : { ...initialView, overlay: "trips" };
     case "explore":
       return view.overlay === null ? view : { ...view, overlay: null };
     case "back": {
@@ -83,7 +84,7 @@ export function navigate(journey: Journey, view: View, action: NavAction): View 
       if (view.openPlaceId) return { ...view, openPlaceId: null };
       if (nav.level === "city") return { nav: { level: "country", country: nav.country }, openPlaceId: null, overlay: null };
       if (nav.level === "country") return exploringView;
-      return view.overlay === null ? initialView : view;
+      return view;
     }
   }
 }

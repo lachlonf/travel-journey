@@ -215,10 +215,6 @@ a {
   font-family: var(--meta);
 }
 
-.section-title {
-  margin-bottom: 0.5rem;
-}
-
 .trip-list a {
   display: flex;
   flex-wrap: wrap;
