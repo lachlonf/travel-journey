@@ -11,6 +11,8 @@ npm run dev
 
 Open http://localhost:3000.
 
+To open it from a phone on the same network, use the Network address `next dev` prints. The dev server only serves `/_next/*` to origins it knows about, so `next.config.ts` allows this machine's own addresses; without that the page still arrives, styled and server-rendered, while every script is refused and nothing that needs JavaScript — the globe above all — ever runs. `bash scripts/check-lan-dev.sh` says whether a LAN device is being served the scripts, since a browser shows no sign either way.
+
 Until Supabase is connected, the site reads a sample Peru trip from `data/seed.json`. Anything you add is saved to `.data/journey.json`, and uploaded photos go in `public/uploads/`. Both are gitignored.
 
 The admin is at http://localhost:3000/admin. A `.env.local` was created with `ADMIN_PASSWORD=change-me` and a random `SESSION_SECRET`. Change the password.
