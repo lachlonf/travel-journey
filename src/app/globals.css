@@ -900,9 +900,16 @@ a {
     padding-inline: var(--gutter);
   }
 
+  /*
+   * The title at the top and the choices within thumb reach at the bottom, so the
+   * globe keeps the whole middle. Resting the stack on one edge leaves the world
+   * showing as a sliver, and the landing is meant to rest on it, not cover it.
+   */
   .landing {
-    top: auto;
+    top: var(--gutter);
     bottom: var(--gutter);
+    max-height: none;
+    justify-content: space-between;
     transform: none;
   }
 
