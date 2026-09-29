@@ -75,6 +75,18 @@ a {
   color: var(--ink-dim);
 }
 
+/* Spoken, never drawn: the layer changes under a screen reader like it does on paper. */
+.announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -132,27 +144,44 @@ a {
   top: 50%;
   left: var(--gutter);
   z-index: 3;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
   width: min(36rem, calc(100% - 2 * var(--gutter)));
   max-height: calc(100% - 2 * var(--gutter));
-  overflow-y: auto;
   transform: translateY(-50%);
   /* The globe stays live around the words, so it can be spun from beside them. */
   pointer-events: none;
 }
 
-.landing > * {
+/*
+ * Lays the landing out, and on a screen too short to rest it on, scrolls it.
+ * Transparent to the pointer like the shell around it, so only the words catch
+ * a drag and the world can still be turned from the space between them.
+ */
+.landing-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-height: 100%;
+  pointer-events: none;
+}
+
+.landing-scroll > * {
   pointer-events: auto;
 }
 
-/* An unlocked country wears its tapestry hue, so the title sits on its own backing. */
+/*
+ * An unlocked country wears its tapestry hue, so the title sits on its own
+ * backing — a sheet laid on the paper like the choices below it, and lit the
+ * same way. Bounded by its shadow rather than a rule, or the stack reads as one
+ * boxed thing above two loose ones.
+ */
 .landing header {
   padding: 1.1rem 1.2rem;
   background: var(--paper-glass);
-  border: 1px solid var(--line);
+  border: 0;
   backdrop-filter: blur(6px);
+  box-shadow:
+    0 1px 1px color-mix(in srgb, var(--ink) 12%, transparent),
+    0 10px 20px -12px color-mix(in srgb, var(--ink) 30%, transparent);
 }
 
 /* Level with each other: following a trip is a way in, not a lesser one. */
@@ -173,29 +202,70 @@ a {
 
 .landing-lede {
   margin-top: 1rem;
+}
+
+.landing-state {
+  margin-top: 0.3rem;
   color: var(--ink-dim);
 }
 
+/*
+ * A choice is a sheet laid on the paper, not a box drawn on it: the mat a print
+ * rests on, with the same contact edge and barely-there lift that make an object
+ * read as an object. No rule around it, because a border draws it back onto the
+ * screen — and the stack is a column, so the two titles share a baseline however
+ * long their lines run.
+ */
 .choice {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   text-align: left;
   cursor: pointer;
   padding: 1.4rem 1.5rem;
   background: var(--paper-raised);
-  border: 1px solid var(--line);
+  border: 0;
   text-decoration: none;
+  box-shadow:
+    0 1px 1px color-mix(in srgb, var(--ink) 12%, transparent),
+    0 10px 20px -12px color-mix(in srgb, var(--ink) 30%, transparent);
   transition:
-    background-color 0.25s,
-    border-color 0.25s;
+    background-color 0.2s,
+    color 0.2s,
+    box-shadow 0.2s;
 }
 
-/* A tap is not a hover: on a touch screen the ink would stay pressed on the last choice touched. */
+.choice-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/*
+ * The one gesture every control shares, finally shared by the landing's own:
+ * ink and paper swap places, and the sheet presses down onto the page.
+ * A tap is not a hover, so on a touch screen the ink would otherwise stay
+ * pressed on the last choice touched.
+ */
 @media (hover: hover) {
   .choice:hover {
-    background: var(--ink-faint);
-    border-color: var(--ink);
+    color: var(--paper);
+    background: var(--ink);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 30%, transparent);
   }
+}
+
+.choice:focus-visible {
+  color: var(--paper);
+  background: var(--ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 30%, transparent);
+}
+
+/* Inked in, the dimmed line has no paper left to dim against. */
+.choice:hover .choice-sub,
+.choice:focus-visible .choice-sub {
+  color: inherit;
 }
 
 .choice strong {
@@ -205,7 +275,7 @@ a {
   font-size: 1.15rem;
 }
 
-.choice span {
+.choice-sub {
   display: block;
   margin-top: 0.35rem;
   font-size: 0.9rem;
@@ -213,9 +283,9 @@ a {
 }
 
 .choice .choice-arrow {
-  float: right;
   margin: 0;
   font-family: var(--meta);
+  color: inherit;
 }
 
 .trip-list a {
@@ -909,8 +979,12 @@ a {
     top: var(--gutter);
     bottom: var(--gutter);
     max-height: none;
-    justify-content: space-between;
     transform: none;
+  }
+
+  .landing-scroll {
+    height: 100%;
+    justify-content: space-between;
   }
 
   .story-inner {
@@ -976,6 +1050,43 @@ a {
     bottom: 6.5rem;
     max-height: 55dvh;
     transform: none;
+  }
+}
+
+/*
+ * A screen too short to rest the landing on — a phone turned on its side. The
+ * words give up their room first, and the choices come back into a row rather
+ * than going under a fold. Here alone the landing takes the pointer back: a
+ * choice that can't be reached is worse than a world that can't be spun from
+ * beside it.
+ */
+@media (max-height: 460px) {
+  .landing-scroll {
+    gap: 0.9rem;
+    overflow-y: auto;
+    pointer-events: auto;
+  }
+
+  .landing header {
+    padding: 0.75rem 0.9rem;
+  }
+
+  .landing h1 {
+    margin-top: 0;
+    font-size: 2rem;
+  }
+
+  .landing-lede {
+    margin-top: 0.5rem;
+  }
+
+  .landing-choices {
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.75rem;
+  }
+
+  .choice {
+    padding: 0.9rem 1rem;
   }
 }
 

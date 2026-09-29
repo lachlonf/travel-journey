@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { plural } from "@/lib/format";
 import { buildJourney } from "@/lib/journey";
 import { exploringView, initialView, navigate, type NavAction } from "@/lib/navigation";
 import type { JourneyData } from "@/lib/types";
@@ -34,19 +35,59 @@ export function ExploreApp({
   const dispatch = useCallback((action: NavAction) => setView((current) => navigate(journey, current, action)), [journey]);
   const back = useCallback(() => dispatch({ type: "back" }), [dispatch]);
 
+  const { nav, openPlaceId, overlay, reading } = view;
+  const country = nav.level === "country" ? journey.countryByCode.get(nav.country) : undefined;
+  const stageRef = useRef<HTMLElement>(null);
+
+  // At the world with nothing open there is still one layer to leave, where this
+  // route carries the landing: the choice that was made to get here.
+  const atWorld = overlay === null && !reading && !openPlaceId && nav.level === "world";
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") back();
+      if (event.key !== "Escape") return;
+      if (landing && atWorld) dispatch({ type: "landing" });
+      else back();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [back]);
+  }, [back, dispatch, landing, atWorld]);
 
-  const { nav, openPlaceId, overlay, reading } = view;
-  const country = nav.level === "country" ? journey.countryByCode.get(nav.country) : undefined;
+  /*
+   * Leaving the landing takes its buttons out of the document with them, so the
+   * focus they held would fall to the body and a keyboard visitor would be left
+   * nowhere. The world takes it instead, and the live region below says where
+   * they have arrived, since nothing else about the change is announced.
+   */
+  const leftLanding = useRef(false);
+  useEffect(() => {
+    if (overlay === "landing") {
+      leftLanding.current = true;
+      return;
+    }
+    if (!leftLanding.current) return;
+    leftLanding.current = false;
+    stageRef.current?.focus();
+  }, [overlay]);
+
+  const announcement = (() => {
+    if (overlay === "landing") return "";
+    if (overlay === "trips") return "Trips.";
+    if (reading && openPlaceId) return `Reading ${journey.placeById.get(openPlaceId)?.name ?? "a story"}.`;
+    if (openPlaceId) return `${journey.placeById.get(openPlaceId)?.name ?? "A place"}.`;
+    if (nav.level === "city") return `${journey.placeById.get(nav.cityId)?.name ?? "A city"}.`;
+    if (country) return `${country.name}.`;
+    return journey.countries.length
+      ? `The world. ${plural(journey.countries.length, "country", "countries")} unlocked.`
+      : "The world. No country has bloomed yet.";
+  })();
 
   return (
-    <main className="stage">
+    <main className="stage" ref={stageRef} tabIndex={-1}>
+      {/* One region for every layer, so arriving anywhere is spoken once. */}
+      <p className="announce" aria-live="polite">
+        {announcement}
+      </p>
       {/* Inert while reading: the world is still there, but it is behind a page now. */}
       <div className="globe-shell" inert={reading}>
         <LazyGlobe journey={journey} nav={nav} panelOpen={openPlaceId !== null || overlay === "trips"} onNavigate={dispatch} />
@@ -72,7 +113,9 @@ export function ExploreApp({
         </header>
       )}
 
-      {overlay === null && nav.level === "world" && journey.countries.length === 0 && <p className="hud-empty">Nothing unlocked yet.</p>}
+      {overlay === null && nav.level === "world" && journey.countries.length === 0 && (
+        <p className="hud-empty">No country has bloomed yet — the world is still all glyphs.</p>
+      )}
       {country && <CountrySummary journey={journey} country={country} />}
       {openPlaceId && !reading && (
         <StoryPanel

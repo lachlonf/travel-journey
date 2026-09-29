@@ -132,6 +132,29 @@ export function createGlobeEngine(container: HTMLElement, options: { onCountryCl
     controls.autoRotate = false;
   });
 
+  /*
+   * The world is a control, not a picture: it takes the tab order and turns with
+   * the arrow keys, in the same directions a drag would take it. Without this the
+   * one thing the landing invites you to do — spin the globe — is the one thing a
+   * visitor without a pointer cannot do.
+   */
+  const canvas = renderer.domElement;
+  canvas.tabIndex = 0;
+  canvas.setAttribute("aria-label", "The globe. Turn the world with the arrow keys.");
+  const TURN = 0.12;
+  canvas.addEventListener("keydown", (event) => {
+    const step = event.shiftKey ? TURN * 3 : TURN;
+    // Signs follow OrbitControls' own drag mapping, so a key turns the world the
+    // way the same-named drag would.
+    if (event.key === "ArrowRight") controls.rotateLeft(step);
+    else if (event.key === "ArrowLeft") controls.rotateLeft(-step);
+    else if (event.key === "ArrowDown") controls.rotateUp(step);
+    else if (event.key === "ArrowUp") controls.rotateUp(-step);
+    else return;
+    controls.autoRotate = false;
+    event.preventDefault();
+  });
+
   let altitude = WORLD_ALTITUDE;
   function settleAt(nextAltitude: number) {
     controls.minDistance = 1 + nextAltitude * 0.5;
