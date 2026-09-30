@@ -2,13 +2,23 @@
 export type Hex = `#${string}`;
 
 /**
- * The paper the globe is drawn on and the ink it is drawn in. The glyph pass
- * writes an opaque image over the whole canvas, so its paper has to be the same
- * paper the page rests on: these are the stylesheet's `--paper` and `--ink`, and
- * `ink.test.ts` holds them to it.
+ * The paper the whole site rests on and the one ink it is drawn in, written
+ * here once. The glyph pass draws an opaque image over the whole canvas, so the
+ * globe's paper has to be the same paper the page rests on; rather than hold two
+ * copies to each other, the stylesheet is handed these by the root element (see
+ * `inkTokens`) and mixes every fainter impression out of them.
  */
 export const PAPER: Hex = "#f4f1e9";
 export const INK: Hex = "#1c1cc9";
+
+/**
+ * The paper and ink as the custom properties `globals.css` expects to find on
+ * the root element. They are the only two colours the stylesheet does not
+ * define itself, because the globe needs the same two compiled into a shader.
+ */
+export function inkTokens(): Record<string, string> {
+  return { "--paper": PAPER, "--ink": INK };
+}
 
 /** The red, green and blue of a hex, each from 0 to 1. */
 export function channels(hex: Hex): [number, number, number] {

@@ -8,12 +8,16 @@
  * second colour: the only colour in the interface is a country's tapestry hue
  * on the globe, and the photographs themselves.
  */
+/*
+ * --paper and --ink are not written here: the globe needs the same two colours
+ * compiled into a shader, so they are written once in
+ * `src/components/globe/ink.ts` and handed to the root element by the layout.
+ * Everything below mixes out of them.
+ */
 :root {
-  --paper: #f4f1e9;
   /* A sheet resting on the ground: brighter than it, so objects read as objects. */
   --paper-raised: #fbf9f3;
   --paper-glass: color-mix(in srgb, var(--paper) 88%, transparent);
-  --ink: #1c1cc9;
   /* The same ink, a lighter impression. Holds 4.98:1 on paper, so meta stays legible. */
   --ink-dim: color-mix(in srgb, var(--ink) 72%, transparent);
   /* Rules a control is bounded by (3.5:1), and rules that are only decoration. */

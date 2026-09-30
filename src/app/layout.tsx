@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cabin, Courier_Prime, Literata } from "next/font/google";
+import { inkTokens, PAPER } from "@/components/globe/ink";
 import "./globals.css";
 
 const display = Cabin({ variable: "--font-display-face", subsets: ["latin"] });
@@ -19,12 +20,17 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f4f1e9",
+  // The browser chrome is part of the paper, so it takes the same paper.
+  themeColor: PAPER,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} ${meta.variable}`}>
+    <html
+      lang="en"
+      className={`${display.variable} ${body.variable} ${meta.variable}`}
+      style={inkTokens() as React.CSSProperties}
+    >
       <body>{children}</body>
     </html>
   );
