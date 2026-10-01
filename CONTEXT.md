@@ -79,8 +79,12 @@ A photograph as it appears in a story: matted, very slightly tilted, resting on 
 _Avoid_: image, thumbnail, card, tile
 
 **Interlocked pair**:
-The one pair of prints in a story that rest against each other, the lower one laid over the upper one's corner. It is chosen by position — the first two photographs standing next to each other in the story — so a story interlocks the same two prints forever, and never covers more of either than a corner. A story read in a preview, or on a narrow screen, has no room for it and stacks the pair instead.
+The one pair of prints in a story that rest against each other, the lower one laid over the upper one's corner. It is chosen by position — the first two photographs standing next to each other in the story — so a story interlocks the same two prints forever, and never covers more of either than a corner. A narrow screen has no room for it and stacks the pair instead.
 _Avoid_: collage, overlap, stack
+
+**Contact sheet**:
+A story's photographs printed small in rows, as a darkroom sheet, so a preview can say what is on the roll without laying the photographs out. A sheet is one sheet: it needs more than a single row of photographs to be one, and it never grows past what one holds. Under that floor the preview counts the photographs instead; over that ceiling the sheet is full and counts the rest, so the sheet and the count are one idea wearing two faces. A contact sheet indexes photographs; it never shows them. What a photograph becomes when it is shown is a print.
+_Avoid_: grid, gallery, thumbnail, tile, carousel
 
 **Landing**:
 The title and the two choices — Explore and Trips — resting on the globe when the site opens. The landing is a layer over the world, never a page of its own, so choosing either one never reloads the globe.
@@ -90,9 +94,9 @@ _Avoid_: home page, splash, index
 Whatever rests over the globe before anywhere has been chosen: the landing, or the trips panel. There is at most one, it always sits over the whole world rather than over somewhere drilled into, and opening a place puts it away.
 
 **Preview**:
-A place's story as it opens beside the globe: enough to tell what somewhere is without leaving the world you clicked it from. The preview is where a story is met; it is never where a story is read.
+A place as it opens beside the globe: where it is, when it was, the opening of its writing, and a contact sheet or a count of its photographs. Enough to tell what somewhere is without leaving the world you clicked it from. The preview is where a story is met; it is never where a story is read, and it never holds a print.
 _Avoid_: card, popup, detail panel
 
 **Reading**:
-A story taken over the whole screen as a page, where the writing and the prints have the room a panel can't give them. The globe is left exactly where it was underneath, so leaving the page comes back to the same preview over the same country.
+A story taken over the whole screen as a page, where the writing runs in full and the photographs are met as prints. The globe is left exactly where it was underneath, so leaving the page comes back to the same preview over the same country. Reading is the only place a print appears.
 _Avoid_: detail page, article view, modal, lightbox
