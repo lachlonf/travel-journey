@@ -44,3 +44,6 @@ next-env.d.ts
 /.data
 /public/uploads
 !.env.example
+
+# design critique tool state: session cache, and one timestamped report per run
+/.impeccable
